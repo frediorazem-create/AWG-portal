@@ -1,0 +1,17 @@
+{
+  "name": "AWG Portal - Allengerechtes Wohnen e.G.",
+  "short_name": "AWG Portal",
+  "description": "Genossenschafts-Plattform für Allengerechtes Wohnen e.G.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f4ef",
+  "theme_color": "#24854a",
+  "lang": "de",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
