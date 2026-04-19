@@ -267,101 +267,25 @@ export class MemStorage implements IStorage {
 
     // ── Polls ──
 
-    // Poll 1: Namensfindung
+    // Echte Abstimmung: Namensfindung (über WhatsApp durchgeführt am 14.04.2026)
     const poll1Id = randomUUID();
     this.polls.set(poll1Id, {
       id: poll1Id,
-      title: "Wie soll unsere Genossenschaft heißen?",
-      description: "Wir brauchen einen offiziellen Namen für die Genossenschaft. Der Name wird im Genossenschaftsregister eingetragen und auf allen offiziellen Dokumenten erscheinen. Bitte beachtet: Ein guter Name sollte den Zweck (allengerechtes Wohnen) widerspiegeln und leicht merkbar sein. Die Abstimmung läuft bis zur Gründungsversammlung am 25. März.",
+      title: "Namensfindung",
+      description: "Abstimmung über den offiziellen Namen der Genossenschaft. Durchgeführt über WhatsApp am 14.04.2026. Ergebnis: AllenGeRechtes Wohnen eG mit 6 Stimmen einstimmig gewählt.",
       type: "multiple-choice",
-      status: "Aktiv",
-      quorum: 6,
+      status: "Beendet",
+      quorum: 5,
       createdBy: "Fredi Orazem",
-      createdAt: "2026-03-15T10:00:00",
-      endsAt: "2026-03-25T18:00:00",
+      createdAt: "2026-04-14T09:59:00",
+      endsAt: "2026-04-14T23:59:00",
     });
     const p1Opts = [
-      { text: "Allengerechtes Wohnen eG", votes: 4 },
-      { text: "Wohnen für Alle eG", votes: 2 },
-      { text: "Gemeinschaftlich Wohnen Treuchtlingen eG", votes: 1 },
-      { text: "LebensPlätze eG", votes: 0 },
-      { text: "WohnWerk Altmühltal eG", votes: 1 },
+      { text: "AllenGeRechtes Wohnen eG", votes: 6 },
     ];
     p1Opts.forEach((o) => {
       const oid = randomUUID();
       this.pollOptions.set(oid, { id: oid, pollId: poll1Id, text: o.text, votes: o.votes });
-    });
-
-    // Poll 2: Energiekonzept
-    const poll2Id = randomUUID();
-    this.polls.set(poll2Id, {
-      id: poll2Id,
-      title: "Bevorzugtes Energiekonzept",
-      description: "Welches Energiekonzept soll für das Bauprojekt priorisiert werden? Frank Löffler hat die verschiedenen Optionen im Dokument 'Energiekonzept_Vergleich.xlsx' zusammengestellt. Bitte schaut euch die Unterlagen im Dokumentenbereich an, bevor ihr abstimmt.",
-      type: "multiple-choice",
-      status: "Aktiv",
-      quorum: 5,
-      createdBy: "Frank Löffler",
-      createdAt: "2026-03-10T10:00:00",
-      endsAt: "2026-03-28T23:59:00",
-    });
-    const p2Opts = [
-      { text: "Wärmepumpe + Photovoltaik", votes: 5 },
-      { text: "Fernwärme + Solarthermie", votes: 2 },
-      { text: "Pelletheizung + Photovoltaik", votes: 1 },
-      { text: "Blockheizkraftwerk (BHKW)", votes: 0 },
-    ];
-    p2Opts.forEach((o) => {
-      const oid = randomUUID();
-      this.pollOptions.set(oid, { id: oid, pollId: poll2Id, text: o.text, votes: o.votes });
-    });
-
-    // Poll 3: Termin Infoabend
-    const poll3Id = randomUUID();
-    this.polls.set(poll3Id, {
-      id: poll3Id,
-      title: "Termin Infoabend für Interessenten",
-      description: "Wir möchten einen offenen Infoabend für potenzielle neue Mitglieder veranstalten. Welcher Termin passt den meisten von euch?",
-      type: "multiple-choice",
-      status: "Aktiv",
-      quorum: 4,
-      createdBy: "Fredi Orazem",
-      createdAt: "2026-03-12T08:00:00",
-      endsAt: "2026-03-30T23:59:00",
-    });
-    const p3Opts = [
-      { text: "22. April 2026 (Mittwoch)", votes: 5 },
-      { text: "24. April 2026 (Freitag)", votes: 2 },
-      { text: "29. April 2026 (Mittwoch)", votes: 3 },
-    ];
-    p3Opts.forEach((o) => {
-      const oid = randomUUID();
-      this.pollOptions.set(oid, { id: oid, pollId: poll3Id, text: o.text, votes: o.votes });
-    });
-
-    // Poll 4: Gemeinschaftsraum (beendet)
-    const poll4Id = randomUUID();
-    this.polls.set(poll4Id, {
-      id: poll4Id,
-      title: "Gemeinschaftsraum-Ausstattung",
-      description: "Welche Ausstattung ist für den Gemeinschaftsraum am wichtigsten? Es können später weitere Elemente ergänzt werden, aber wir möchten die Prioritäten für die erste Planungsphase festlegen.",
-      type: "multiple-choice",
-      status: "Beendet",
-      quorum: 6,
-      createdBy: "Ute Blaumann",
-      createdAt: "2026-02-20T10:00:00",
-      endsAt: "2026-03-05T23:59:00",
-    });
-    const p4Opts = [
-      { text: "Große Küche für gemeinsames Kochen", votes: 7 },
-      { text: "Werkstatt / Makerspace", votes: 4 },
-      { text: "Bibliothek / Leseecke", votes: 3 },
-      { text: "Kinderspielbereich", votes: 5 },
-      { text: "Co-Working Bereich", votes: 6 },
-    ];
-    p4Opts.forEach((o) => {
-      const oid = randomUUID();
-      this.pollOptions.set(oid, { id: oid, pollId: poll4Id, text: o.text, votes: o.votes });
     });
 
     // ── Meeting Rooms ──
