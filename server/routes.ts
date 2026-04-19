@@ -67,6 +67,12 @@ export async function registerRoutes(
     res.status(201).json(member);
   });
 
+  app.patch("/api/members/:id", async (req, res) => {
+    const updated = await storage.updateMember(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: "Mitglied nicht gefunden" });
+    res.json(updated);
+  });
+
   // ── Channels ──
   app.get("/api/channels", async (_req, res) => {
     const channels = await storage.getChannels();

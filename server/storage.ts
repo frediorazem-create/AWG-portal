@@ -25,6 +25,7 @@ export interface IStorage {
   getMembers(): Promise<Member[]>;
   getMember(id: string): Promise<Member | undefined>;
   createMember(member: InsertMember): Promise<Member>;
+  updateMember(id: string, data: Partial<Member>): Promise<Member | undefined>;
 
   // Channels
   getChannels(): Promise<Channel[]>;
@@ -400,6 +401,17 @@ export class MemStorage implements IStorage {
     const member: Member = { ...m, id };
     this.members.set(id, member);
     return member;
+  }
+  async updateMember(id: string, data: Partial<Member>): Promise<Member | undefined> {
+    const existing = this.members.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data, id };
+    // Recalculate avatar from name if name changed
+    if (data.name && !data.avatar) {
+      updated.avatar = data.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+    }
+    this.members.set(id, updated);
+    return updated;
   }
 
   // Channels
