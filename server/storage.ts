@@ -171,15 +171,8 @@ export class MemStorage implements IStorage {
       });
     });
 
-    // ── Announcements ──
-    const annData: InsertAnnouncement[] = [
-      { title: "Gründungsversammlung am 25. März 2026", content: "Liebe Mitglieder, wir laden herzlich zur Gründungsversammlung ein. Tagesordnung: Wahl des Vorstands, Beschluss der Satzung, Finanzplanung 2026. Ort: Bürgerhaus Mitte, Saal 3.", priority: "Dringend", pinned: true, authorId: memberIds[0], authorName: "Fredi Orazem", createdAt: "2026-03-14T10:00:00" },
-      { title: "Neue Satzungsentwurf verfügbar", content: "Der überarbeitete Satzungsentwurf v3.2 steht im Dokumentenbereich unter 'Satzung' zum Download bereit. Bitte bis zum 20. März Feedback geben.", priority: "Wichtig", pinned: true, authorId: memberIds[1], authorName: "Markus Stegfellner", createdAt: "2026-03-12T14:00:00" },
-      { title: "Willkommen Ute Blaumann!", content: "Wir freuen uns, Ute Blaumann als neues Mitglied begrüßen zu dürfen. Herzlich willkommen im Team!", priority: "Normal", pinned: false, authorId: memberIds[0], authorName: "Fredi Orazem", createdAt: "2026-03-10T09:00:00" },
-      { title: "AG Finanzen – Zwischenbericht", content: "Der Zwischenbericht der AG Finanzen zeigt positive Entwicklungen. Die Eigenkapitalquote liegt bei 38%. Details im Finanzen-Ordner.", priority: "Normal", pinned: false, authorId: memberIds[5], authorName: "Frank Stegmann", createdAt: "2026-03-08T16:00:00" },
-      { title: "Grundstücksbesichtigung am 5. April", content: "Die Besichtigung des Grundstücks findet am 5. April um 14 Uhr statt. Treffpunkt vor Ort. Bitte um Anmeldung!", priority: "Wichtig", pinned: false, authorId: memberIds[4], authorName: "Frank Löffler", createdAt: "2026-03-06T11:00:00" },
-      { title: "Sprechstunde des Vorstands", content: "Ab sofort bieten wir jeden Dienstag von 17-18 Uhr eine offene Sprechstunde an. Kommen Sie vorbei oder melden Sie sich per Chat.", priority: "Normal", pinned: false, authorId: memberIds[1], authorName: "Markus Stegfellner", createdAt: "2026-03-04T09:00:00" },
-    ];
+    // ── Announcements (leer – echte Ankündigungen werden über die App erstellt) ──
+    const annData: InsertAnnouncement[] = [];
     annData.forEach((a) => {
       const id = randomUUID();
       this.announcements.set(id, { ...a, id });
