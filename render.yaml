@@ -3,7 +3,7 @@ services:
     name: awg-portal
     runtime: node
     plan: free
-    buildCommand: npm install --include=dev && npm run build
+    buildCommand: npm run render-build
     startCommand: NODE_ENV=production node dist/index.cjs
     envVars:
       - key: NODE_VERSION
