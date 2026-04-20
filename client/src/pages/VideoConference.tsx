@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -16,63 +15,15 @@ import {
 import { Label } from "@/components/ui/label";
 import {
   Video,
-  Users,
   Plus,
   ExternalLink,
   MonitorPlay,
-  Phone,
   Copy,
   Check,
-  X,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { MeetingRoom } from "@shared/schema";
-
-/* ── Jitsi Meeting Embed ── */
-function JitsiMeeting({
-  roomName,
-  displayName,
-  onClose,
-}: {
-  roomName: string;
-  displayName: string;
-  onClose: () => void;
-}) {
-  // Sanitize room name for Jitsi URL
-  const jitsiRoom = `AWG-${roomName.replace(/[^a-zA-Z0-9-]/g, "")}`;
-  const jitsiUrl = `https://meet.jit.si/${jitsiRoom}#userInfo.displayName="${encodeURIComponent(displayName)}"&config.prejoinConfig.enabled=false`;
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black">
-      {/* Top bar */}
-      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-2 bg-black/80 backdrop-blur-sm">
-        <div className="flex items-center gap-2 text-white">
-          <Video className="w-4 h-4" />
-          <span className="text-sm font-medium">{roomName}</span>
-          <Badge variant="secondary" className="text-[10px]">
-            Jitsi Meet
-          </Badge>
-        </div>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={onClose}
-          data-testid="button-leave-meeting"
-        >
-          <Phone className="w-4 h-4 mr-1 rotate-[135deg]" />
-          Verlassen
-        </Button>
-      </div>
-      {/* Jitsi iframe */}
-      <iframe
-        src={jitsiUrl}
-        className="w-full h-full border-0"
-        allow="camera;microphone;fullscreen;display-capture;autoplay;clipboard-write"
-        title="Videokonferenz"
-      />
-    </div>
-  );
-}
 
 /* ── Share Link Button ── */
 function ShareLinkButton({ roomName }: { roomName: string }) {
@@ -86,7 +37,6 @@ function ShareLinkButton({ roomName }: { roomName: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback: open in new tab
       window.open(shareUrl, "_blank");
     }
   };
@@ -116,8 +66,7 @@ function ShareLinkButton({ roomName }: { roomName: string }) {
 export default function VideoConference() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", description: "" });
-  const [activeMeeting, setActiveMeeting] = useState<string | null>(null);
-  const [activeMeetingName, setActiveMeetingName] = useState("");
+  const { toast } = useToast();
 
   const { data: rooms, isLoading } = useQuery<MeetingRoom[]>({
     queryKey: ["/api/meeting-rooms"],
@@ -138,29 +87,15 @@ export default function VideoConference() {
       queryClient.invalidateQueries({ queryKey: ["/api/meeting-rooms"] });
       setOpen(false);
       setForm({ name: "", description: "" });
+      toast({ title: "Erstellt", description: "Neuer Konferenzraum wurde angelegt." });
     },
   });
 
-  const joinMeeting = (room: MeetingRoom) => {
-    setActiveMeeting(room.id);
-    setActiveMeetingName(room.name);
+  const openJitsi = (room: MeetingRoom) => {
+    const jitsiRoom = `AWG-${room.name.replace(/[^a-zA-Z0-9-]/g, "")}`;
+    const url = `https://meet.jit.si/${jitsiRoom}#userInfo.displayName=%22Fredi%20Orazem%22`;
+    window.open(url, "_blank");
   };
-
-  const leaveMeeting = () => {
-    setActiveMeeting(null);
-    setActiveMeetingName("");
-  };
-
-  // Show Jitsi fullscreen when in a meeting
-  if (activeMeeting) {
-    return (
-      <JitsiMeeting
-        roomName={activeMeetingName}
-        displayName="Fredi Orazem"
-        onClose={leaveMeeting}
-      />
-    );
-  }
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-4xl">
@@ -173,7 +108,7 @@ export default function VideoConference() {
             <Video className="w-5 h-5" /> Videokonferenz
           </h1>
           <p className="text-sm text-muted-foreground">
-            Jitsi Meet — Videokonferenzen direkt in der App
+            Jitsi Meet — kostenlose Videokonferenzen ohne App-Download
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -224,10 +159,10 @@ export default function VideoConference() {
       {/* Info banner */}
       <div className="rounded-lg border bg-primary/5 dark:bg-primary/10 p-4">
         <p className="text-sm text-muted-foreground">
-          <strong className="text-foreground">So funktioniert's:</strong> Tippe auf
-          "Beitreten" um die Videokonferenz direkt in der App zu starten. Kein
-          Download nötig — funktioniert im Browser. Teile den Link mit
-          Teilnehmern, die nicht in der App eingeloggt sind.
+          <strong className="text-foreground">So funktioniert's:</strong>{" "}
+          Tippe auf "Konferenz starten" — Jitsi Meet öffnet sich in einem neuen Tab.
+          Kein Download nötig, funktioniert direkt im Browser (iPad, Handy, Desktop).
+          Teile den Link mit Teilnehmern über "Link teilen".
         </p>
       </div>
 
@@ -239,60 +174,42 @@ export default function VideoConference() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {rooms?.map((room) => {
-            const jitsiRoom = `AWG-${room.name.replace(/[^a-zA-Z0-9-]/g, "")}`;
-            return (
-              <Card
-                key={room.id}
-                data-testid={`room-${room.id}`}
-                className="overflow-hidden"
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base font-semibold flex items-center gap-2">
-                      <MonitorPlay className="w-4 h-4" />
-                      {room.name}
-                    </CardTitle>
-                    <ShareLinkButton roomName={room.name} />
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {room.description && (
-                    <p className="text-sm text-muted-foreground">
-                      {room.description}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span>Erstellt von {room.createdBy}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      className="w-full"
-                      onClick={() => joinMeeting(room)}
-                      data-testid={`join-room-${room.id}`}
-                    >
-                      <Video className="w-4 h-4 mr-2" />
-                      Beitreten
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() =>
-                        window.open(
-                          `https://meet.jit.si/${jitsiRoom}`,
-                          "_blank"
-                        )
-                      }
-                      data-testid={`external-room-${room.id}`}
-                    >
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      Im Tab
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+          {rooms?.map((room) => (
+            <Card
+              key={room.id}
+              data-testid={`room-${room.id}`}
+              className="overflow-hidden"
+            >
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <MonitorPlay className="w-4 h-4" />
+                    {room.name}
+                  </CardTitle>
+                  <ShareLinkButton roomName={room.name} />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {room.description && (
+                  <p className="text-sm text-muted-foreground">
+                    {room.description}
+                  </p>
+                )}
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span>Erstellt von {room.createdBy}</span>
+                </div>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={() => openJitsi(room)}
+                  data-testid={`join-room-${room.id}`}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Konferenz starten
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
@@ -301,7 +218,7 @@ export default function VideoConference() {
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Video className="w-12 h-12 text-muted-foreground mb-3" />
             <p className="text-sm text-muted-foreground">
-              Noch keine Konferenzräume erstellt.
+              Noch keine Konferenzräume erstellt. Erstelle einen mit "Neuer Raum".
             </p>
           </CardContent>
         </Card>
