@@ -139,37 +139,7 @@ export class MemStorage implements IStorage {
       this.channels.set(id, { ...c, id });
     });
 
-    // ── Messages ──
-    const msgData: { channelIdx: number; memberIdx: number; content: string; time: string }[] = [
-      { channelIdx: 0, memberIdx: 0, content: "Willkommen im allgemeinen Kanal! Hier können wir alles besprechen, was die Genossenschaft betrifft.", time: "2026-03-10T09:00:00" },
-      { channelIdx: 0, memberIdx: 2, content: "Danke Fredi! Ich freue mich auf die Zusammenarbeit.", time: "2026-03-10T09:15:00" },
-      { channelIdx: 0, memberIdx: 1, content: "Die nächste Mitgliederversammlung ist am 25. März. Bitte tragt euch den Termin ein!", time: "2026-03-10T10:30:00" },
-      { channelIdx: 0, memberIdx: 4, content: "Ist schon notiert. Gibt es eine vorläufige Tagesordnung?", time: "2026-03-10T11:00:00" },
-      { channelIdx: 0, memberIdx: 0, content: "Ja, ich schicke die Tagesordnung bis Ende der Woche per E-Mail raus.", time: "2026-03-10T11:15:00" },
-      { channelIdx: 1, memberIdx: 1, content: "Der Notartermin für die Satzung steht jetzt fest: 2. April 2026.", time: "2026-03-11T08:00:00" },
-      { channelIdx: 1, memberIdx: 3, content: "Super! Hat der Anwalt die letzte Version der Satzung schon geprüft?", time: "2026-03-11T08:30:00" },
-      { channelIdx: 1, memberIdx: 1, content: "Ja, die finale Fassung liegt seit gestern vor. Ich lade sie in den Dokumenten-Bereich hoch.", time: "2026-03-11T09:00:00" },
-      { channelIdx: 1, memberIdx: 6, content: "Können wir die Änderungen noch einmal in der AG besprechen?", time: "2026-03-11T09:30:00" },
-      { channelIdx: 2, memberIdx: 5, content: "Die aktuelle Kalkulation zeigt, dass wir mindestens 15 Mitglieder für die Gründung brauchen.", time: "2026-03-12T10:00:00" },
-      { channelIdx: 2, memberIdx: 0, content: "Das Eigenkapital liegt aktuell bei ca. 120.000 €. Wir brauchen weitere Genossenschaftsanteile.", time: "2026-03-12T10:30:00" },
-      { channelIdx: 2, memberIdx: 7, content: "Wie hoch ist der Anteil pro Mitglied?", time: "2026-03-12T11:00:00" },
-      { channelIdx: 2, memberIdx: 5, content: "Der Pflichtanteil beträgt 500 €. Weitere Anteile sind freiwillig à 500 € möglich.", time: "2026-03-12T11:15:00" },
-      { channelIdx: 3, memberIdx: 4, content: "Der Architekt hat die ersten Entwürfe für das Gemeinschaftshaus geschickt. Sieht vielversprechend aus!", time: "2026-03-13T14:00:00" },
-      { channelIdx: 3, memberIdx: 2, content: "Können wir die Grundrisse in der nächsten AG Bauplanung besprechen?", time: "2026-03-13T14:30:00" },
-      { channelIdx: 3, memberIdx: 4, content: "Klar, ich bereite eine Präsentation vor. Termin ist Donnerstag 16 Uhr.", time: "2026-03-13T15:00:00" },
-    ];
-    msgData.forEach((m) => {
-      const id = randomUUID();
-      const memberArr = Array.from(this.members.values());
-      this.messages.set(id, {
-        id,
-        channelId: channelIds[m.channelIdx],
-        memberId: memberIds[m.memberIdx],
-        memberName: memberArr[m.memberIdx].name,
-        content: m.content,
-        createdAt: m.time,
-      });
-    });
+    // ── Messages (leer – echte Nachrichten werden über den Chat erstellt) ──
 
     // ── Announcements (leer – echte Ankündigungen werden über die App erstellt) ──
     const annData: InsertAnnouncement[] = [];
@@ -178,85 +148,11 @@ export class MemStorage implements IStorage {
       this.announcements.set(id, { ...a, id });
     });
 
-    // ── Events ──
-    const eventData: InsertEvent[] = [
-      { title: "Gründungsversammlung", description: "Offizielle Gründungsversammlung der Genossenschaft mit Wahl des Vorstands und Beschluss der Satzung.", date: "2026-03-25", time: "18:00", endTime: "21:00", location: "Bürgerhaus Mitte, Saal 3", category: "Versammlung" },
-      { title: "AG Bauplanung", description: "Besprechung der Architektenentwürfe und Grundrissplanung.", date: "2026-03-19", time: "16:00", endTime: "18:00", location: "Online (BigBlueButton)", category: "Workshop" },
-      { title: "Notartermin Satzung", description: "Notarielle Beurkundung der Genossenschaftssatzung.", date: "2026-04-02", time: "10:00", endTime: "11:30", location: "Notariat Dr. Schmidt, Hauptstr. 15", category: "Sonstiges" },
-      { title: "Grundstücksbesichtigung", description: "Besichtigung des potenziellen Baugrundstücks Lindenstraße 42.", date: "2026-04-05", time: "14:00", endTime: "15:30", location: "Lindenstraße 42", category: "Treffen" },
-      { title: "Workshop: Gemeinschaftliches Wohnen", description: "Impulsvortrag und Diskussion zu Modellen des gemeinschaftlichen Wohnens.", date: "2026-04-12", time: "10:00", endTime: "16:00", location: "Volkshochschule, Raum 204", category: "Workshop" },
-      { title: "Vorstandssitzung", description: "Reguläre monatliche Vorstandssitzung.", date: "2026-04-15", time: "19:00", endTime: "21:00", location: "Online (BigBlueButton)", category: "Versammlung" },
-      { title: "Infoabend für Interessenten", description: "Offener Infoabend für potenzielle neue Mitglieder der Genossenschaft.", date: "2026-04-22", time: "18:00", endTime: "20:00", location: "Stadtteilzentrum, Großer Saal", category: "Treffen" },
-      { title: "AG Finanzen Quartalsbericht", description: "Vorstellung und Diskussion des Q1 2026 Finanzberichts.", date: "2026-04-28", time: "17:00", endTime: "18:30", location: "Online (BigBlueButton)", category: "Workshop" },
-      { title: "Frühlingsfest der Genossenschaft", description: "Gemütliches Beisammensein mit Grillen im Gemeinschaftsgarten.", date: "2026-05-10", time: "15:00", endTime: "20:00", location: "Gemeinschaftsgarten, Am Park 8", category: "Treffen" },
-      { title: "Mitgliederversammlung Q2", description: "Ordentliche Mitgliederversammlung mit Berichten und Abstimmungen.", date: "2026-06-20", time: "18:00", endTime: "21:00", location: "Bürgerhaus Mitte, Saal 3", category: "Versammlung" },
-    ];
-    eventData.forEach((e) => {
-      const id = randomUUID();
-      this.events.set(id, { ...e, id });
-    });
+    // ── Events (leer – echte Termine werden über den Kalender erstellt) ──
 
-    // ── Tasks ──
-    const taskData: InsertTask[] = [
-      { title: "Satzung finalisieren", description: "Letzte Korrekturen am Satzungsentwurf v3.2 einarbeiten und dem Notar übermitteln.", status: "In Bearbeitung", priority: "Hoch", assigneeId: memberIds[1], assigneeName: "Markus Stegfellner", dueDate: "2026-03-20", createdAt: "2026-03-01T10:00:00" },
-      { title: "Finanzplan 2026 erstellen", description: "Detaillierten Finanzplan mit Einnahmen/Ausgaben-Prognose für die Gründungsphase erstellen.", status: "In Bearbeitung", priority: "Hoch", assigneeId: memberIds[5], assigneeName: "Frank Stegmann", dueDate: "2026-03-22", createdAt: "2026-03-02T09:00:00" },
-      { title: "Mitgliederverzeichnis aktualisieren", description: "Alle aktuellen und angemeldeten Mitglieder im Verzeichnis erfassen.", status: "Erledigt", priority: "Mittel", assigneeId: memberIds[0], assigneeName: "Fredi Orazem", dueDate: "2026-03-10", createdAt: "2026-02-28T14:00:00" },
-      { title: "Architektenbriefing vorbereiten", description: "Anforderungskatalog und Raumprogramm für den Architekten zusammenstellen.", status: "In Bearbeitung", priority: "Hoch", assigneeId: memberIds[4], assigneeName: "Frank Löffler", dueDate: "2026-03-18", createdAt: "2026-03-05T11:00:00" },
-      { title: "Bankgespräch KfW-Förderung", description: "Termin mit der GLS Bank für KfW-Fördermittel vereinbaren und Unterlagen vorbereiten.", status: "Offen", priority: "Hoch", assigneeId: memberIds[5], assigneeName: "Frank Stegmann", dueDate: "2026-03-28", createdAt: "2026-03-08T10:00:00" },
-      { title: "Website Genossenschaft erstellen", description: "Einfache Informationswebsite mit Projektbeschreibung und Kontaktformular.", status: "Offen", priority: "Mittel", assigneeId: memberIds[6], assigneeName: "Dagmar-Judith Kormannshaus-Mathiesen", dueDate: "2026-04-15", createdAt: "2026-03-10T09:00:00" },
-      { title: "Genossenschaftsregister-Eintrag", description: "Unterlagen für die Eintragung ins Genossenschaftsregister zusammenstellen.", status: "Offen", priority: "Hoch", assigneeId: memberIds[1], assigneeName: "Markus Stegfellner", dueDate: "2026-04-10", createdAt: "2026-03-10T10:00:00" },
-      { title: "Protokoll Gründungsversammlung", description: "Schriftführung und Protokollerstellung für die Gründungsversammlung.", status: "Offen", priority: "Mittel", assigneeId: memberIds[2], assigneeName: "Martina Model", dueDate: "2026-03-27", createdAt: "2026-03-12T08:00:00" },
-      { title: "Beitrittserklärungen drucken", description: "50 Beitrittserklärungen und Informationsblätter für den Infoabend drucken.", status: "Erledigt", priority: "Niedrig", assigneeId: memberIds[7], assigneeName: "Ute Blaumann", dueDate: "2026-03-15", createdAt: "2026-03-05T14:00:00" },
-      { title: "Energiekonzept recherchieren", description: "Verschiedene nachhaltige Energiekonzepte (Wärmepumpe, Solar, etc.) vergleichen.", status: "In Bearbeitung", priority: "Mittel", assigneeId: memberIds[4], assigneeName: "Frank Löffler", dueDate: "2026-04-20", createdAt: "2026-03-10T11:00:00" },
-      { title: "Logo und Corporate Design", description: "Entwurf eines Logos und grundlegenden Corporate Designs für die Genossenschaft.", status: "Offen", priority: "Niedrig", assigneeId: memberIds[6], assigneeName: "Dagmar-Judith Kormannshaus-Mathiesen", dueDate: "2026-04-30", createdAt: "2026-03-12T10:00:00" },
-      { title: "Flyer für Infoabend gestalten", description: "Einladungsflyer für den Infoabend am 22. April entwerfen und verteilen.", status: "Offen", priority: "Mittel", assigneeId: memberIds[2], assigneeName: "Martina Model", dueDate: "2026-04-10", createdAt: "2026-03-14T09:00:00" },
-      { title: "Versicherungsangebote einholen", description: "Angebote für Bauherrenhaftpflicht und Gebäudeversicherung vergleichen.", status: "Offen", priority: "Niedrig", assigneeId: memberIds[3], assigneeName: "Rudolf Pfänder", dueDate: "2026-05-01", createdAt: "2026-03-14T15:00:00" },
-      { title: "Gemeinschaftsraum planen", description: "Konzept für die Nutzung und Ausstattung des Gemeinschaftsraums erarbeiten.", status: "Erledigt", priority: "Mittel", assigneeId: memberIds[7], assigneeName: "Ute Blaumann", dueDate: "2026-03-08", createdAt: "2026-02-20T10:00:00" },
-      { title: "Prüfungsverband kontaktieren", description: "Kontakt zum genossenschaftlichen Prüfungsverband herstellen und Beratungsgespräch vereinbaren.", status: "In Bearbeitung", priority: "Hoch", assigneeId: memberIds[0], assigneeName: "Fredi Orazem", dueDate: "2026-03-25", createdAt: "2026-03-13T11:00:00" },
-    ];
-    taskData.forEach((t) => {
-      const id = randomUUID();
-      this.tasks.set(id, { ...t, id });
-    });
+    // ── Tasks (leer – echte Aufgaben werden über das Kanban-Board erstellt) ──
 
-    // ── Folders ──
-    const folderData: InsertFolder[] = [
-      { name: "Satzung", parentId: null },
-      { name: "Protokolle", parentId: null },
-      { name: "Finanzen", parentId: null },
-      { name: "Bauplanung", parentId: null },
-      { name: "Formulare", parentId: null },
-    ];
-    const folderIds: string[] = [];
-    folderData.forEach((f) => {
-      const id = randomUUID();
-      folderIds.push(id);
-      this.folders.set(id, { ...f, id });
-    });
-
-    // ── Documents ──
-    const docData: InsertDocument[] = [
-      { name: "Satzungsentwurf_v3.2.pdf", type: "pdf", size: "245 KB", folderId: folderIds[0], uploadedBy: "Markus Stegfellner", uploadedAt: "2026-03-12T14:00:00" },
-      { name: "Satzung_Kommentare_Anwalt.docx", type: "docx", size: "128 KB", folderId: folderIds[0], uploadedBy: "Markus Stegfellner", uploadedAt: "2026-03-10T10:00:00" },
-      { name: "Mustersatzung_Genossenschaft.pdf", type: "pdf", size: "320 KB", folderId: folderIds[0], uploadedBy: "Fredi Orazem", uploadedAt: "2026-02-15T09:00:00" },
-      { name: "Protokoll_AG_Bauplanung_2026-03-05.pdf", type: "pdf", size: "180 KB", folderId: folderIds[1], uploadedBy: "Frank Löffler", uploadedAt: "2026-03-06T10:00:00" },
-      { name: "Protokoll_Vorstandssitzung_2026-02-20.pdf", type: "pdf", size: "156 KB", folderId: folderIds[1], uploadedBy: "Martina Model", uploadedAt: "2026-02-21T09:00:00" },
-      { name: "Protokoll_Mitgliederversammlung_2026-01.pdf", type: "pdf", size: "210 KB", folderId: folderIds[1], uploadedBy: "Martina Model", uploadedAt: "2026-01-28T16:00:00" },
-      { name: "Finanzplan_2026_Entwurf.xlsx", type: "xlsx", size: "85 KB", folderId: folderIds[2], uploadedBy: "Frank Stegmann", uploadedAt: "2026-03-08T14:00:00" },
-      { name: "Kostenvoranschlag_Architekt.pdf", type: "pdf", size: "520 KB", folderId: folderIds[2], uploadedBy: "Frank Löffler", uploadedAt: "2026-03-05T11:00:00" },
-      { name: "KfW_Foerderung_Uebersicht.pdf", type: "pdf", size: "310 KB", folderId: folderIds[2], uploadedBy: "Frank Stegmann", uploadedAt: "2026-02-28T10:00:00" },
-      { name: "Grundriss_EG_Entwurf.pdf", type: "pdf", size: "1.2 MB", folderId: folderIds[3], uploadedBy: "Frank Löffler", uploadedAt: "2026-03-13T14:00:00" },
-      { name: "Grundriss_OG_Entwurf.pdf", type: "pdf", size: "980 KB", folderId: folderIds[3], uploadedBy: "Frank Löffler", uploadedAt: "2026-03-13T14:15:00" },
-      { name: "Lageplan_Lindenstrasse_42.pdf", type: "pdf", size: "2.1 MB", folderId: folderIds[3], uploadedBy: "Rudolf Pfänder", uploadedAt: "2026-03-01T10:00:00" },
-      { name: "Energiekonzept_Vergleich.xlsx", type: "xlsx", size: "120 KB", folderId: folderIds[3], uploadedBy: "Frank Löffler", uploadedAt: "2026-03-10T15:00:00" },
-      { name: "Beitrittserklärung.pdf", type: "pdf", size: "95 KB", folderId: folderIds[4], uploadedBy: "Fredi Orazem", uploadedAt: "2026-02-01T09:00:00" },
-      { name: "Mitgliedsantrag_Formular.docx", type: "docx", size: "78 KB", folderId: folderIds[4], uploadedBy: "Fredi Orazem", uploadedAt: "2026-02-01T09:30:00" },
-      { name: "Selbstauskunft_Formular.pdf", type: "pdf", size: "110 KB", folderId: folderIds[4], uploadedBy: "Frank Stegmann", uploadedAt: "2026-02-15T14:00:00" },
-    ];
-    docData.forEach((d) => {
-      const id = randomUUID();
-      this.documents.set(id, { ...d, id });
-    });
+    // ── Folders & Documents (leer – echte Dokumente werden über die App hochgeladen) ──
 
     // ── Polls ──
 
