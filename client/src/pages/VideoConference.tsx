@@ -29,7 +29,7 @@ import type { MeetingRoom } from "@shared/schema";
 function ShareLinkButton({ roomName }: { roomName: string }) {
   const [copied, setCopied] = useState(false);
   const jitsiRoom = `AWG-${roomName.replace(/[^a-zA-Z0-9-]/g, "")}`;
-  const shareUrl = `https://meet.jit.si/${jitsiRoom}`;
+  const shareUrl = `https://meet.ffmuc.net/${jitsiRoom}`;
 
   const handleCopy = async () => {
     try {
@@ -77,7 +77,7 @@ export default function VideoConference() {
       const jitsiRoom = `AWG-${form.name.replace(/[^a-zA-Z0-9-]/g, "")}`;
       await apiRequest("POST", "/api/meeting-rooms", {
         ...form,
-        url: `https://meet.jit.si/${jitsiRoom}`,
+        url: `https://meet.ffmuc.net/${jitsiRoom}`,
         isActive: false,
         participants: 0,
         createdBy: "Fredi Orazem",
@@ -93,7 +93,7 @@ export default function VideoConference() {
 
   const openJitsi = (room: MeetingRoom) => {
     const jitsiRoom = `AWG-${room.name.replace(/[^a-zA-Z0-9-]/g, "")}`;
-    const url = `https://meet.jit.si/${jitsiRoom}#userInfo.displayName=%22Fredi%20Orazem%22`;
+    const url = `https://meet.ffmuc.net/${jitsiRoom}#userInfo.displayName=%22Fredi%20Orazem%22`;
     window.open(url, "_blank");
   };
 

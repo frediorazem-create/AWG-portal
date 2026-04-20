@@ -179,8 +179,8 @@ export class MemStorage implements IStorage {
 
     // ── Meeting Rooms ──
     const roomData: InsertMeetingRoom[] = [
-      { name: "Vorstandssitzung", description: "Regelmäßiger Raum für Vorstandssitzungen und vertrauliche Besprechungen.", url: "https://meet.jit.si/AWG-Vorstandssitzung", isActive: true, participants: 3, createdBy: "Fredi Orazem" },
-      { name: "AG Bauplanung", description: "Offener Raum für die Arbeitsgruppe Bauplanung.", url: "https://meet.jit.si/AWG-AGBauplanung", isActive: false, participants: 0, createdBy: "Frank Löffler" },
+      { name: "Vorstandssitzung", description: "Regelmäßiger Raum für Vorstandssitzungen und vertrauliche Besprechungen.", url: "https://meet.ffmuc.net/AWG-Vorstandssitzung", isActive: true, participants: 3, createdBy: "Fredi Orazem" },
+      { name: "AG Bauplanung", description: "Offener Raum für die Arbeitsgruppe Bauplanung.", url: "https://meet.ffmuc.net/AWG-AGBauplanung", isActive: false, participants: 0, createdBy: "Frank Löffler" },
     ];
     roomData.forEach((r) => {
       const id = randomUUID();
