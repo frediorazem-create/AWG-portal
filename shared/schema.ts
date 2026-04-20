@@ -23,8 +23,11 @@ export const members = pgTable("members", {
   name: text("name").notNull(),
   email: text("email").notNull(),
   phone: text("phone"),
-  role: text("role").notNull(), // Vorstand, Aufsichtsrat, Gründungsmitglied, Mitglied, Interessent
-  avatar: text("avatar"), // initials or URL
+  role: text("role").notNull(), // Vorstand, Aufsichtsrat, Gründungsmitglied, Mitglied, Interessent, Unterstützer
+  avatar: text("avatar"), // initials
+  profileImage: text("profile_image"), // base64 data URL for profile photo
+  address: text("address"), // street, city, zip
+  website: text("website"), // personal or company website URL
   joinedAt: text("joined_at"),
 });
 

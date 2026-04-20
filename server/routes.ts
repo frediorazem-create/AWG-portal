@@ -17,6 +17,7 @@ import {
 } from "@shared/schema";
 import {
   createNotionMember,
+  updateNotionMember,
   createNotionChannel,
   createNotionMessage,
   createNotionAnnouncement,
@@ -70,6 +71,15 @@ export async function registerRoutes(
   app.patch("/api/members/:id", async (req, res) => {
     const updated = await storage.updateMember(req.params.id, req.body);
     if (!updated) return res.status(404).json({ error: "Mitglied nicht gefunden" });
+
+    // Sync changes to Notion — find member by name and update
+    notionSync("updateMember", () => {
+      const results = searchNotionDatabase("mitglieder", updated.name || " ");
+      if (results.length > 0) {
+        updateNotionMember(results[0].id, req.body);
+      }
+    });
+
     res.json(updated);
   });
 

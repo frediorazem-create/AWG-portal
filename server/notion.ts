@@ -70,6 +70,8 @@ export function createNotionMember(data: {
   role: string;
   avatar?: string | null;
   joinedAt?: string | null;
+  address?: string | null;
+  website?: string | null;
 }): any {
   return callNotionTool("notion-create-pages", {
     parent: { data_source_id: DB_IDS.mitglieder, type: "data_source_id" },
@@ -81,6 +83,8 @@ export function createNotionMember(data: {
         "Rolle": data.role,
         ...(data.avatar ? { "Avatar-Initialen": data.avatar } : {}),
         ...(data.joinedAt ? { "date:Mitglied seit:start": data.joinedAt } : {}),
+        ...(data.address ? { "Adresse": data.address } : {}),
+        ...(data.website ? { "Website": data.website } : {}),
       },
     }],
   });
@@ -298,6 +302,27 @@ export function createNotionMeetingRoom(data: {
         ...(data.isActive ? { "Aktiv": "__YES__" } : {}),
       },
     }],
+  });
+}
+
+// ── Update Member Helper ──
+
+export function updateNotionMember(notionPageId: string, data: Record<string, any>): any {
+  const properties: Record<string, any> = {};
+  if (data.name) properties["Name"] = data.name;
+  if (data.email) properties["E-Mail"] = data.email;
+  if (data.phone !== undefined) properties["Telefon"] = data.phone || null;
+  if (data.role) properties["Rolle"] = data.role;
+  if (data.avatar) properties["Avatar-Initialen"] = data.avatar;
+  if (data.address !== undefined) properties["Adresse"] = data.address || null;
+  if (data.website !== undefined) properties["Website"] = data.website || null;
+
+  if (Object.keys(properties).length === 0) return null;
+
+  return callNotionTool("notion-update-page", {
+    page_id: notionPageId,
+    command: "update_properties",
+    properties,
   });
 }
 

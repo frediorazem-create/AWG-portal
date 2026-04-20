@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, Search, Mail, Phone, Pencil, UserPlus } from "lucide-react";
+import { Users, Search, Mail, Phone, Pencil, UserPlus, MapPin, Globe, Camera, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Member } from "@shared/schema";
@@ -31,6 +31,7 @@ const roleColor: Record<string, string> = {
   Aufsichtsrat: "default",
   "Gründungsmitglied": "secondary",
   Mitglied: "secondary",
+  "Unterstützer": "secondary",
   Interessent: "outline",
 };
 
@@ -39,24 +40,129 @@ const ROLES = [
   "Aufsichtsrat",
   "Gründungsmitglied",
   "Mitglied",
+  "Unterstützer",
   "Interessent",
 ];
 
-const emptyForm = { name: "", email: "", phone: "", role: "Mitglied" };
+interface MemberForm {
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  address: string;
+  website: string;
+  profileImage: string;
+}
+
+const emptyForm: MemberForm = { name: "", email: "", phone: "", role: "Mitglied", address: "", website: "", profileImage: "" };
+
+/* ── Profile Image Picker ── */
+function ProfileImagePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Bild darf maximal 2 MB groß sein.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") onChange(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="flex items-center gap-4">
+      <div className="relative">
+        <Avatar className="w-16 h-16">
+          {value ? (
+            <AvatarImage src={value} alt="Profilbild" />
+          ) : (
+            <AvatarFallback className="bg-muted text-muted-foreground">
+              <Camera className="w-6 h-6" />
+            </AvatarFallback>
+          )}
+        </Avatar>
+        {value && (
+          <button
+            type="button"
+            className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center"
+            onClick={() => onChange("")}
+          >
+            <X className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+      <div>
+        <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+          <Camera className="w-3 h-3 mr-1" /> Bild wählen
+        </Button>
+        <p className="text-[10px] text-muted-foreground mt-1">JPG oder PNG, max. 2 MB</p>
+      </div>
+      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFile} />
+    </div>
+  );
+}
+
+/* ── Member Form Fields (shared between Edit & Add) ── */
+function MemberFormFields({ form, setForm }: { form: MemberForm; setForm: React.Dispatch<React.SetStateAction<MemberForm>> }) {
+  return (
+    <div className="space-y-4 py-2">
+      <ProfileImagePicker value={form.profileImage} onChange={(v) => setForm((f) => ({ ...f, profileImage: v }))} />
+      <div className="space-y-2">
+        <Label>Name</Label>
+        <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Vor- und Nachname" data-testid="input-form-name" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <Label>E-Mail</Label>
+          <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="email@example.de" data-testid="input-form-email" />
+        </div>
+        <div className="space-y-2">
+          <Label>Telefon</Label>
+          <Input type="tel" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="Optional" data-testid="input-form-phone" />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Adresse</Label>
+        <Input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder="Straße, PLZ Ort" data-testid="input-form-address" />
+      </div>
+      <div className="space-y-2">
+        <Label>Website</Label>
+        <Input type="url" value={form.website} onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} placeholder="https://www.example.de" data-testid="input-form-website" />
+      </div>
+      <div className="space-y-2">
+        <Label>Rolle</Label>
+        <Select value={form.role} onValueChange={(val) => setForm((f) => ({ ...f, role: val }))}>
+          <SelectTrigger data-testid="select-form-role">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ROLES.map((r) => (
+              <SelectItem key={r} value={r}>{r}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
 
 export default function Members() {
   const [search, setSearch] = useState("");
   const [editingMember, setEditingMember] = useState<Member | null>(null);
-  const [editForm, setEditForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState<MemberForm>(emptyForm);
   const [addOpen, setAddOpen] = useState(false);
-  const [addForm, setAddForm] = useState(emptyForm);
+  const [addForm, setAddForm] = useState<MemberForm>(emptyForm);
   const { toast } = useToast();
 
   const { data: members, isLoading } = useQuery<Member[]>({
     queryKey: ["/api/members"],
   });
 
-  // ── Update mutation ──
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string; updates: Partial<Member> }) => {
       const res = await apiRequest("PATCH", `/api/members/${data.id}`, data.updates);
@@ -72,9 +178,8 @@ export default function Members() {
     },
   });
 
-  // ── Create mutation ──
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; email: string; phone: string | null; role: string; avatar: string; joinedAt: string }) => {
+    mutationFn: async (data: Record<string, unknown>) => {
       const res = await apiRequest("POST", "/api/members", data);
       return res.json();
     },
@@ -96,6 +201,9 @@ export default function Members() {
       email: member.email,
       phone: member.phone || "",
       role: member.role,
+      address: (member as any).address || "",
+      website: (member as any).website || "",
+      profileImage: (member as any).profileImage || "",
     });
   };
 
@@ -112,6 +220,9 @@ export default function Members() {
         email: editForm.email.trim(),
         phone: editForm.phone.trim() || null,
         role: editForm.role,
+        address: editForm.address.trim() || null,
+        website: editForm.website.trim() || null,
+        profileImage: editForm.profileImage || null,
       },
     });
   };
@@ -129,6 +240,9 @@ export default function Members() {
       phone: addForm.phone.trim() || null,
       role: addForm.role,
       avatar,
+      address: addForm.address.trim() || null,
+      website: addForm.website.trim() || null,
+      profileImage: addForm.profileImage || null,
       joinedAt: new Date().toISOString().slice(0, 10),
     });
   };
@@ -145,41 +259,27 @@ export default function Members() {
     <div className="p-4 md:p-6 space-y-6 max-w-5xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1
-            className="text-xl font-semibold flex items-center gap-2"
-            data-testid="text-members-title"
-          >
+          <h1 className="text-xl font-semibold flex items-center gap-2" data-testid="text-members-title">
             <Users className="w-5 h-5" /> Mitglieder
           </h1>
           <p className="text-sm text-muted-foreground">
             {members?.length ?? 0} Mitglieder und Interessenten
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => { setAddForm(emptyForm); setAddOpen(true); }}
-          data-testid="button-add-member"
-        >
+        <Button size="sm" onClick={() => { setAddForm(emptyForm); setAddOpen(true); }} data-testid="button-add-member">
           <UserPlus className="w-4 h-4 mr-1" /> Hinzufügen
         </Button>
       </div>
 
-      {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Mitglieder suchen..."
-          className="pl-9"
-          data-testid="input-search-members"
-        />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Mitglieder suchen..." className="pl-9" data-testid="input-search-members" />
       </div>
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+            <Skeleton key={i} className="h-36 w-full" />
           ))}
         </div>
       ) : (
@@ -193,26 +293,20 @@ export default function Members() {
             >
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  <Avatar className="w-10 h-10">
+                  <Avatar className="w-11 h-11">
+                    {(member as any).profileImage ? (
+                      <AvatarImage src={(member as any).profileImage} alt={member.name} />
+                    ) : null}
                     <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-                      {member.avatar ||
-                        member.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
+                      {member.avatar || member.name.split(" ").map((n) => n[0]).join("")}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold">
-                        {member.name}
-                      </span>
+                      <span className="text-sm font-semibold">{member.name}</span>
                       <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                     </div>
-                    <Badge
-                      variant={roleColor[member.role] as any}
-                      className="text-[10px]"
-                    >
+                    <Badge variant={roleColor[member.role] as any} className="text-[10px]">
                       {member.role}
                     </Badge>
                     <div className="space-y-0.5 pt-1">
@@ -223,6 +317,26 @@ export default function Members() {
                       {member.phone && (
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                           <Phone className="w-3 h-3 shrink-0" /> {member.phone}
+                        </p>
+                      )}
+                      {(member as any).address && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{(member as any).address}</span>
+                        </p>
+                      )}
+                      {(member as any).website && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Globe className="w-3 h-3 shrink-0" />
+                          <a
+                            href={(member as any).website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="truncate hover:underline text-primary"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {(member as any).website.replace(/^https?:\/\//, "")}
+                          </a>
                         </p>
                       )}
                     </div>
@@ -244,74 +358,19 @@ export default function Members() {
       )}
 
       {!isLoading && filtered.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-8">
-          Keine Mitglieder gefunden.
-        </p>
+        <p className="text-sm text-muted-foreground text-center py-8">Keine Mitglieder gefunden.</p>
       )}
 
       {/* ── Edit Dialog ── */}
       <Dialog open={!!editingMember} onOpenChange={(open) => { if (!open) setEditingMember(null); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Mitglied bearbeiten</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="edit-name">Name</Label>
-              <Input
-                id="edit-name"
-                value={editForm.name}
-                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Vor- und Nachname"
-                data-testid="input-edit-name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-email">E-Mail</Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={editForm.email}
-                onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="email@example.de"
-                data-testid="input-edit-email"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-phone">Telefon</Label>
-              <Input
-                id="edit-phone"
-                type="tel"
-                value={editForm.phone}
-                onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
-                placeholder="Optional"
-                data-testid="input-edit-phone"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Rolle</Label>
-              <Select
-                value={editForm.role}
-                onValueChange={(val) => setEditForm((f) => ({ ...f, role: val }))}
-              >
-                <SelectTrigger data-testid="select-edit-role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROLES.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <MemberFormFields form={editForm} setForm={setEditForm} />
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setEditingMember(null)} data-testid="button-cancel-edit">
-              Abbrechen
-            </Button>
-            <Button onClick={handleSave} disabled={updateMutation.isPending} data-testid="button-save-member">
+            <Button variant="outline" onClick={() => setEditingMember(null)}>Abbrechen</Button>
+            <Button onClick={handleSave} disabled={updateMutation.isPending}>
               {updateMutation.isPending ? "Speichert..." : "Speichern"}
             </Button>
           </DialogFooter>
@@ -320,67 +379,14 @@ export default function Members() {
 
       {/* ── Add Dialog ── */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Neues Mitglied hinzufügen</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="add-name">Name</Label>
-              <Input
-                id="add-name"
-                value={addForm.name}
-                onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Vor- und Nachname"
-                data-testid="input-add-name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="add-email">E-Mail</Label>
-              <Input
-                id="add-email"
-                type="email"
-                value={addForm.email}
-                onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="email@example.de"
-                data-testid="input-add-email"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="add-phone">Telefon</Label>
-              <Input
-                id="add-phone"
-                type="tel"
-                value={addForm.phone}
-                onChange={(e) => setAddForm((f) => ({ ...f, phone: e.target.value }))}
-                placeholder="Optional"
-                data-testid="input-add-phone"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Rolle</Label>
-              <Select
-                value={addForm.role}
-                onValueChange={(val) => setAddForm((f) => ({ ...f, role: val }))}
-              >
-                <SelectTrigger data-testid="select-add-role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROLES.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <MemberFormFields form={addForm} setForm={setAddForm} />
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setAddOpen(false)} data-testid="button-cancel-add">
-              Abbrechen
-            </Button>
-            <Button onClick={handleAdd} disabled={createMutation.isPending} data-testid="button-submit-member">
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Abbrechen</Button>
+            <Button onClick={handleAdd} disabled={createMutation.isPending}>
               {createMutation.isPending ? "Speichert..." : "Hinzufügen"}
             </Button>
           </DialogFooter>
