@@ -90,19 +90,48 @@ export interface IStorage {
 //   - Local:  ./data/awg.db
 // Override via env var DB_PATH.
 
-const DB_PATH = process.env.DB_PATH || (process.env.RENDER ? "/var/data/awg.db" : "./data/awg.db");
+// DB path resolution with robust fallback chain:
+//   1. DB_PATH env var (explicit override)
+//   2. /var/data/awg.db (Render persistent disk, if writable)
+//   3. /tmp/awg.db (Render ephemeral, survives while instance is warm)
+//   4. ./data/awg.db (local dev)
+function resolveDbPath(): string {
+  const explicit = process.env.DB_PATH;
+  if (explicit) return explicit;
+
+  const candidates = process.env.RENDER
+    ? ["/var/data/awg.db", "/tmp/awg.db"]
+    : ["./data/awg.db"];
+
+  for (const p of candidates) {
+    const dir = dirname(p);
+    try {
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      // Probe writability with a test-open
+      const probe = new Database(p);
+      probe.close();
+      return p;
+    } catch (err) {
+      console.warn(`[storage] Cannot use ${p}: ${(err as Error).message}`);
+    }
+  }
+  // Last-resort: /tmp is almost always writable on Linux
+  return "/tmp/awg.db";
+}
+
+const DB_PATH = resolveDbPath();
 
 export class SqliteStorage implements IStorage {
   private db: Database.Database;
 
   constructor() {
-    // Ensure directory exists
     const dir = dirname(DB_PATH);
     if (!existsSync(dir)) {
       try { mkdirSync(dir, { recursive: true }); } catch {}
     }
 
-    console.log(`[storage] Opening SQLite database at: ${DB_PATH}`);
+    const persistent = DB_PATH.startsWith("/var/data") || (!DB_PATH.startsWith("/tmp") && !!process.env.DB_PATH);
+    console.log(`[storage] Opening SQLite database at: ${DB_PATH} ${persistent ? "(persistent)" : "(ephemeral — data will be lost on restart!)"}`);
     this.db = new Database(DB_PATH);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
