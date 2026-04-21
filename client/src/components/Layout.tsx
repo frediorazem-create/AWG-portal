@@ -12,6 +12,7 @@ import {
   Users,
   Video,
   Mail,
+  Inbox,
   Sun,
   Moon,
   Menu,
@@ -33,6 +34,7 @@ const navItems = [
   { href: "/members", label: "Mitglieder", icon: Users },
   { href: "/video", label: "Videokonferenz", icon: Video },
   { href: "/mailing", label: "E-Mail-Verteiler", icon: Mail },
+  { href: "/posteingang", label: "Posteingang", icon: Inbox },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

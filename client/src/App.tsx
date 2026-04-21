@@ -16,6 +16,7 @@ import Voting from "@/pages/Voting";
 import Members from "@/pages/Members";
 import VideoConference from "@/pages/VideoConference";
 import Mailing from "@/pages/Mailing";
+import Inbox from "@/pages/Inbox";
 import NotFound from "@/pages/not-found";
 
 function AppRouter() {
@@ -32,6 +33,7 @@ function AppRouter() {
         <Route path="/members" component={Members} />
         <Route path="/video" component={VideoConference} />
         <Route path="/mailing" component={Mailing} />
+        <Route path="/posteingang" component={Inbox} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, Send, Users, AlertCircle, CheckCircle2, Video } from "lucide-react";
+import { Mail, Send, Users, AlertCircle, CheckCircle2, Video, Paperclip, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Member } from "@shared/schema";
 
@@ -99,6 +99,40 @@ export default function Mailing() {
   const [sending, setSending] = useState(false);
   const [templateId, setTemplateId] = useState("blank");
   const [smtpStatus, setSmtpStatus] = useState<{ ok: boolean; error?: string } | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
+
+  const MAX_FILE_MB = 15;
+  const MAX_TOTAL_MB = 20;
+  const totalAttachmentBytes = useMemo(() => attachments.reduce((s, f) => s + f.size, 0), [attachments]);
+
+  function formatSize(bytes: number) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / 1024 / 1024).toFixed(1) + " MB";
+  }
+
+  function handleFilesSelected(files: FileList | null) {
+    if (!files) return;
+    const newFiles: File[] = [];
+    for (const f of Array.from(files)) {
+      if (f.size > MAX_FILE_MB * 1024 * 1024) {
+        toast({ title: "Datei zu groß", description: `${f.name} überschreitet ${MAX_FILE_MB} MB.`, variant: "destructive" });
+        continue;
+      }
+      newFiles.push(f);
+    }
+    const combined = [...attachments, ...newFiles];
+    const totalBytes = combined.reduce((s, f) => s + f.size, 0);
+    if (totalBytes > MAX_TOTAL_MB * 1024 * 1024) {
+      toast({ title: "Gesamtgröße überschritten", description: `Anhänge zusammen max. ${MAX_TOTAL_MB} MB.`, variant: "destructive" });
+      return;
+    }
+    setAttachments(combined);
+  }
+
+  function removeAttachment(idx: number) {
+    setAttachments(a => a.filter((_, i) => i !== idx));
+  }
 
   const { data: members = [], isLoading } = useQuery<Member[]>({ queryKey: ["/api/members"] });
 
@@ -182,21 +216,28 @@ export default function Mailing() {
 
     setSending(true);
     try {
-      const res = await apiRequest("POST", "/api/mailing/send", {
-        recipients: selectedMembers.map((m) => m.email),
-        subject,
-        body,
+      // Build multipart FormData so files can be attached
+      const fd = new FormData();
+      selectedMembers.forEach(m => fd.append("recipients", m.email));
+      fd.append("subject", subject);
+      fd.append("body", body);
+      attachments.forEach(f => fd.append("attachments", f, f.name));
+
+      const res = await fetch((import.meta.env.VITE_API_BASE || "") + "/api/mailing/send", {
+        method: "POST",
+        body: fd,
       });
       const data = await res.json();
       if (data.success) {
         toast({
           title: "E-Mails versendet",
-          description: `${data.sent} Nachrichten erfolgreich versendet.`,
+          description: `${data.sent} Nachrichten erfolgreich versendet${data.attachments ? ` (mit ${data.attachments} Anhang/Anhängen)` : ""}.`,
         });
         setSubject("");
         setBody("");
         setSelectedIds(new Set());
         setTemplateId("blank");
+        setAttachments([]);
       } else {
         toast({
           title: "Versand fehlgeschlagen",
@@ -347,6 +388,46 @@ export default function Mailing() {
                 className="font-mono text-sm"
                 data-testid="textarea-body"
               />
+            </div>
+
+            <div>
+              <Label className="text-xs">Anhänge (max. {MAX_TOTAL_MB} MB gesamt)</Label>
+              <div className="mt-1 space-y-2">
+                <label className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-dashed border-border rounded-md cursor-pointer hover:bg-accent/40" data-testid="button-attach">
+                  <Paperclip className="w-4 h-4" />
+                  Datei hinzufügen
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleFilesSelected(e.target.files)}
+                    data-testid="input-attach"
+                  />
+                </label>
+                {attachments.length > 0 && (
+                  <div className="border rounded-md divide-y" data-testid="list-attachments">
+                    {attachments.map((f, i) => (
+                      <div key={i} className="flex items-center gap-2 px-3 py-2 text-sm" data-testid={`row-attachment-${i}`}>
+                        <Paperclip className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <span className="flex-1 truncate">{f.name}</span>
+                        <span className="text-xs text-muted-foreground">{formatSize(f.size)}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(i)}
+                          className="p-1 hover:bg-accent rounded"
+                          data-testid={`button-remove-attachment-${i}`}
+                          aria-label="Entfernen"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="px-3 py-1.5 text-xs text-muted-foreground">
+                      Gesamt: {formatSize(totalAttachmentBytes)} von {MAX_TOTAL_MB} MB
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-2">

@@ -34,6 +34,8 @@ import {
   searchNotionDatabase,
 } from "./notion";
 import { sendBulkMail, verifySmtp } from "./mailer";
+import { listInbox, getMail, getAttachment, setFlags, verifyImap } from "./imap";
+import multer from "multer";
 
 /** Fire-and-forget Notion sync — never blocks the response */
 function notionSync(label: string, fn: () => any) {
@@ -96,13 +98,31 @@ export async function registerRoutes(
     res.json(status);
   });
 
-  app.post("/api/mailing/send", async (req, res) => {
-    const { recipients, subject, body, replyTo } = req.body as {
-      recipients?: string[];
-      subject?: string;
-      body?: string;
-      replyTo?: string;
-    };
+  // File-upload middleware for mail attachments
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024, files: 10 }, // 15 MB per file, 10 files max
+  });
+
+  app.post("/api/mailing/send", upload.array("attachments", 10), async (req, res) => {
+    // When multer is used, form fields arrive on req.body; arrays come as strings
+    const recipientsRaw = req.body.recipients;
+    const recipients: string[] = Array.isArray(recipientsRaw)
+      ? recipientsRaw
+      : typeof recipientsRaw === "string"
+        ? (recipientsRaw.startsWith("[") ? JSON.parse(recipientsRaw) : recipientsRaw.split(",").map(s => s.trim()))
+        : [];
+    const subject = (req.body.subject || "").toString();
+    const body = (req.body.body || "").toString();
+    const replyTo = req.body.replyTo ? String(req.body.replyTo) : undefined;
+    const inReplyTo = req.body.inReplyTo ? String(req.body.inReplyTo) : undefined;
+    const referencesRaw = req.body.references;
+    const references: string[] | undefined = Array.isArray(referencesRaw)
+      ? referencesRaw
+      : typeof referencesRaw === "string" && referencesRaw
+        ? (referencesRaw.startsWith("[") ? JSON.parse(referencesRaw) : [referencesRaw])
+        : undefined;
+    const useBcc = req.body.useBcc === undefined ? true : req.body.useBcc !== "false" && req.body.useBcc !== false;
 
     if (!Array.isArray(recipients) || recipients.length === 0) {
       return res.status(400).json({ error: "Keine Empfänger angegeben" });
@@ -111,17 +131,86 @@ export async function registerRoutes(
       return res.status(400).json({ error: "Betreff und Text sind erforderlich" });
     }
 
-    // Filter valid emails
     const validEmails = recipients.filter((e) => typeof e === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
     if (validEmails.length === 0) {
       return res.status(400).json({ error: "Keine gültigen E-Mail-Adressen" });
     }
 
-    const result = await sendBulkMail({ to: validEmails, subject, body, replyTo });
+    const files = (req.files as Express.Multer.File[] | undefined) || [];
+    const attachments = files.map(f => ({
+      filename: f.originalname,
+      content: f.buffer,
+      contentType: f.mimetype,
+    }));
+
+    const result = await sendBulkMail({
+      to: validEmails,
+      subject,
+      body,
+      replyTo,
+      attachments: attachments.length > 0 ? attachments : undefined,
+      inReplyTo,
+      references,
+      useBcc,
+    });
     if (!result.success) {
       return res.status(500).json(result);
     }
-    res.json(result);
+    res.json({ ...result, attachments: attachments.length });
+  });
+
+  // ── Posteingang (IMAP direkt) ──
+  app.get("/api/inbox/status", async (_req, res) => {
+    const status = await verifyImap();
+    res.json(status);
+  });
+
+  app.get("/api/inbox", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(String(req.query.limit || "50"), 10) || 50, 200);
+      const search = req.query.search ? String(req.query.search) : undefined;
+      const result = await listInbox({ limit, search });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/inbox/:uid", async (req, res) => {
+    try {
+      const uid = parseInt(req.params.uid, 10);
+      if (!uid) return res.status(400).json({ error: "Ungültige UID" });
+      const mail = await getMail(uid);
+      if (!mail) return res.status(404).json({ error: "Nachricht nicht gefunden" });
+      res.json(mail);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/inbox/:uid/flags", async (req, res) => {
+    try {
+      const uid = parseInt(req.params.uid, 10);
+      const { seen, flagged, deleted } = req.body as { seen?: boolean; flagged?: boolean; deleted?: boolean };
+      await setFlags(uid, { seen, flagged, deleted });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/inbox/:uid/attachments/:partId", async (req, res) => {
+    try {
+      const uid = parseInt(req.params.uid, 10);
+      const partId = req.params.partId;
+      const att = await getAttachment(uid, partId);
+      if (!att) return res.status(404).json({ error: "Anhang nicht gefunden" });
+      res.setHeader("Content-Type", att.contentType);
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(att.filename)}"`);
+      res.send(att.content);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // ── Channels ──

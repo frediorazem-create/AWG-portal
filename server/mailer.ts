@@ -30,11 +30,21 @@ function getTransporter(): Transporter | null {
   return transporter;
 }
 
+export interface MailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 export interface SendMailOptions {
   to: string[];              // recipient emails
   subject: string;
   body: string;              // plain text body
   replyTo?: string;          // optional Reply-To header
+  attachments?: MailAttachment[];
+  inReplyTo?: string;        // Message-ID being replied to (for threading)
+  references?: string[];     // References header for threading
+  useBcc?: boolean;          // if false, send as direct To (for replies)
 }
 
 export interface SendMailResult {
@@ -50,17 +60,33 @@ export async function sendBulkMail(opts: SendMailOptions): Promise<SendMailResul
     return { success: false, sent: 0, failed: opts.to, error: "SMTP nicht konfiguriert (SMTP_PASS fehlt)" };
   }
 
-  // Use BCC for the list so recipients don't see each other
+  // Use BCC for bulk (recipients don't see each other) or direct To for replies
+  const useBcc = opts.useBcc !== false;
   try {
-    const info = await t.sendMail({
+    const mailOpts: any = {
       from: `"${SMTP_FROM_NAME}" <${SMTP_USER}>`,
-      to: SMTP_USER,           // primary: ourselves
-      bcc: opts.to,            // BCC all real recipients
       subject: opts.subject,
       text: opts.body,
       html: opts.body.replace(/\n/g, "<br>"),
       replyTo: opts.replyTo || SMTP_USER,
-    });
+    };
+    if (useBcc) {
+      mailOpts.to = SMTP_USER;
+      mailOpts.bcc = opts.to;
+    } else {
+      mailOpts.to = opts.to;
+    }
+    if (opts.attachments && opts.attachments.length > 0) {
+      mailOpts.attachments = opts.attachments.map(a => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      }));
+    }
+    if (opts.inReplyTo) mailOpts.inReplyTo = opts.inReplyTo;
+    if (opts.references && opts.references.length > 0) mailOpts.references = opts.references;
+
+    const info = await t.sendMail(mailOpts);
     console.log(`[mailer] Sent to ${opts.to.length} recipients. MessageId: ${info.messageId}`);
     return { success: true, sent: opts.to.length, failed: [] };
   } catch (err: any) {
