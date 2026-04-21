@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, ExternalLink, Shield, Smartphone, Info } from "lucide-react";
 
-const SIGNAL_GROUP_URL = "https://signal.group/";
+const SIGNAL_GROUP_URL = "https://signal.group/#CjQKIKwshipgrmqVvFZdTA8GT1jVYtjzEkQGsfcOTuBXfIZTEhDpSCibRkMzBgrRWJ-qEGd1";
 
 export default function Chat() {
   return (
