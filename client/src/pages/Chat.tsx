@@ -1,172 +1,90 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Hash, Send, MessageCircle } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Channel, Message } from "@shared/schema";
+import { MessageCircle, ExternalLink, Shield, Smartphone, Info } from "lucide-react";
+
+const SIGNAL_GROUP_URL = "https://signal.group/";
 
 export default function Chat() {
-  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
-  const [messageText, setMessageText] = useState("");
-  const [mobileShowMessages, setMobileShowMessages] = useState(false);
-
-  const { data: channels, isLoading: loadingChannels } = useQuery<Channel[]>({ queryKey: ["/api/channels"] });
-
-  const activeChannelId = selectedChannel || channels?.[0]?.id || "";
-  const activeChannel = channels?.find((c) => c.id === activeChannelId);
-
-  const { data: messages, isLoading: loadingMessages } = useQuery<Message[]>({
-    queryKey: ["/api/channels", activeChannelId, "messages"],
-    enabled: !!activeChannelId,
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/channels/${activeChannelId}/messages`);
-      return res.json();
-    },
-  });
-
-  const sendMutation = useMutation({
-    mutationFn: async (content: string) => {
-      await apiRequest("POST", "/api/messages", {
-        channelId: activeChannelId,
-        memberId: "current",
-        memberName: "Fredi Orazem",
-        content,
-        createdAt: new Date().toISOString(),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/channels", activeChannelId, "messages"] });
-      setMessageText("");
-    },
-  });
-
-  const handleSend = () => {
-    if (!messageText.trim()) return;
-    sendMutation.mutate(messageText.trim());
-  };
-
   return (
-    <div className="flex h-full">
-      {/* Channel list */}
-      <div className={`w-full md:w-60 border-r border-border shrink-0 flex flex-col ${mobileShowMessages ? "hidden md:flex" : "flex"}`}>
-        <div className="px-4 py-3 border-b border-border">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
-            <MessageCircle className="w-4 h-4" /> Kanäle
-          </h2>
-        </div>
-        <ScrollArea className="flex-1">
-          <div className="p-2 space-y-0.5">
-            {loadingChannels ? (
-              Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)
-            ) : (
-              channels?.map((ch) => (
-                <button
-                  key={ch.id}
-                  onClick={() => {
-                    setSelectedChannel(ch.id);
-                    setMobileShowMessages(true);
-                  }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-                    ch.id === activeChannelId
-                      ? "bg-accent text-accent-foreground font-medium"
-                      : "text-muted-foreground hover:bg-accent/60"
-                  }`}
-                  data-testid={`channel-${ch.name}`}
-                >
-                  <Hash className="w-3.5 h-3.5 shrink-0" />
-                  <span>{ch.name}</span>
-                </button>
-              ))
-            )}
-          </div>
-        </ScrollArea>
+    <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
+      <div className="space-y-2">
+        <h1 className="text-xl font-semibold flex items-center gap-2">
+          <MessageCircle className="w-5 h-5" />
+          Chat & Austausch
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Für die laufende Kommunikation der Genossenschaft nutzen wir Signal — sicher, werbefrei und datenschutzkonform.
+        </p>
       </div>
 
-      {/* Messages area */}
-      <div className={`flex-1 flex flex-col min-w-0 ${!mobileShowMessages ? "hidden md:flex" : "flex"}`}>
-        {/* Channel header */}
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+      <Card className="p-6 space-y-5">
+        <div className="flex items-start gap-3">
+          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary shrink-0">
+            <Shield className="w-5 h-5" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold">Signal-Gruppe „AWG — Allengerechtes Wohnen“</h2>
+            <p className="text-sm text-muted-foreground">
+              Ende-zu-Ende verschlüsselt. Keine Telefonnummer für andere Mitglieder sichtbar, wenn ein Benutzername gesetzt ist.
+            </p>
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-5 space-y-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Smartphone className="w-4 h-4" />
+            So trittst du bei
+          </h3>
+          <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+            <li>
+              Installiere Signal auf deinem Smartphone: {" "}
+              <a
+                href="https://signal.org/download/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+                data-testid="link-signal-download"
+              >
+                signal.org/download
+              </a>
+            </li>
+            <li>Richte Signal mit deiner Telefonnummer ein.</li>
+            <li>Klicke unten auf „Der Gruppe beitreten“ — Signal öffnet sich automatisch.</li>
+            <li>Bestätige den Beitritt in der Signal-App.</li>
+          </ol>
+        </div>
+
+        <div className="border-t border-border pt-5">
           <Button
-            variant="ghost"
-            size="sm"
-            className="md:hidden"
-            onClick={() => setMobileShowMessages(false)}
-            data-testid="back-to-channels"
+            asChild
+            className="w-full sm:w-auto"
+            data-testid="button-join-signal"
           >
-            ←
+            <a href={SIGNAL_GROUP_URL} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Der Signal-Gruppe beitreten
+            </a>
           </Button>
-          <Hash className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-semibold">{activeChannel?.name || "Kanal wählen"}</span>
-          {activeChannel?.description && (
-            <span className="text-xs text-muted-foreground hidden sm:inline ml-2">— {activeChannel.description}</span>
-          )}
+          <p className="text-xs text-muted-foreground mt-3">
+            Hinweis: Der Einladungs-Link wird vom Vorstand gepflegt. Falls der Link nicht funktioniert, wende dich an Fredi Orazem.
+          </p>
         </div>
+      </Card>
 
-        {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-4">
-            {loadingMessages ? (
-              Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)
-            ) : messages?.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Noch keine Nachrichten in diesem Kanal.</p>
-            ) : (
-              messages?.map((msg) => (
-                <div key={msg.id} className="flex gap-3" data-testid={`message-${msg.id}`}>
-                  <Avatar className="w-8 h-8 shrink-0">
-                    <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                      {msg.memberName
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-medium">{msg.memberName}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {new Date(msg.createdAt).toLocaleString("de-DE", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                    <p className="text-sm text-foreground/90">{msg.content}</p>
-                  </div>
-                </div>
-              ))
-            )}
+      <Card className="p-5 bg-muted/40 border-dashed">
+        <div className="flex items-start gap-3">
+          <Info className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">Warum Signal und nicht WhatsApp?</p>
+            <ul className="space-y-1 list-disc list-inside">
+              <li>Keine Weitergabe von Metadaten an Dritte.</li>
+              <li>Gehört einer gemeinnützigen Stiftung, nicht einem Konzern.</li>
+              <li>Open-Source und extern geprüft.</li>
+              <li>Für offizielle Ankündigungen nutzen wir weiterhin den E-Mail-Verteiler im Portal.</li>
+            </ul>
           </div>
-        </ScrollArea>
-
-        {/* Input */}
-        <div className="p-3 border-t border-border">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSend();
-            }}
-            className="flex gap-2"
-          >
-            <Input
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder={`Nachricht an #${activeChannel?.name || ""}...`}
-              className="flex-1"
-              data-testid="input-message"
-            />
-            <Button type="submit" size="icon" disabled={!messageText.trim() || sendMutation.isPending} data-testid="button-send">
-              <Send className="w-4 h-4" />
-            </Button>
-          </form>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

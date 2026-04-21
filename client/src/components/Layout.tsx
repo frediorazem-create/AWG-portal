@@ -11,6 +11,7 @@ import {
   Vote,
   Users,
   Video,
+  Mail,
   Sun,
   Moon,
   Menu,
@@ -31,6 +32,7 @@ const navItems = [
   { href: "/voting", label: "Abstimmungen", icon: Vote },
   { href: "/members", label: "Mitglieder", icon: Users },
   { href: "/video", label: "Videokonferenz", icon: Video },
+  { href: "/mailing", label: "E-Mail-Verteiler", icon: Mail },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

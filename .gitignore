@@ -2,3 +2,11 @@ node_modules/
 dist/
 .env
 *.log
+
+# SQLite local data (persisted on Render via persistent disk)
+data/
+*.db
+*.db-journal
+
+# Local backup
+current-members-backup.json

@@ -33,6 +33,7 @@ import {
   updateNotionPollOptionVotes,
   searchNotionDatabase,
 } from "./notion";
+import { sendBulkMail, verifySmtp } from "./mailer";
 
 /** Fire-and-forget Notion sync — never blocks the response */
 function notionSync(label: string, fn: () => any) {
@@ -81,6 +82,46 @@ export async function registerRoutes(
     });
 
     res.json(updated);
+  });
+
+  app.delete("/api/members/:id", async (req, res) => {
+    const deleted = await storage.deleteMember(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Mitglied nicht gefunden" });
+    res.json({ success: true });
+  });
+
+  // ── Mailing (E-Mail-Verteiler) ──
+  app.get("/api/mailing/status", async (_req, res) => {
+    const status = await verifySmtp();
+    res.json(status);
+  });
+
+  app.post("/api/mailing/send", async (req, res) => {
+    const { recipients, subject, body, replyTo } = req.body as {
+      recipients?: string[];
+      subject?: string;
+      body?: string;
+      replyTo?: string;
+    };
+
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+      return res.status(400).json({ error: "Keine Empfänger angegeben" });
+    }
+    if (!subject || !body) {
+      return res.status(400).json({ error: "Betreff und Text sind erforderlich" });
+    }
+
+    // Filter valid emails
+    const validEmails = recipients.filter((e) => typeof e === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
+    if (validEmails.length === 0) {
+      return res.status(400).json({ error: "Keine gültigen E-Mail-Adressen" });
+    }
+
+    const result = await sendBulkMail({ to: validEmails, subject, body, replyTo });
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+    res.json(result);
   });
 
   // ── Channels ──
@@ -152,6 +193,12 @@ export async function registerRoutes(
     res.json(updated);
   });
 
+  app.delete("/api/announcements/:id", async (req, res) => {
+    const deleted = await storage.deleteAnnouncement(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Ankündigung nicht gefunden" });
+    res.json({ success: true });
+  });
+
   // ── Events ──
   app.get("/api/events", async (_req, res) => {
     const events = await storage.getEvents();
@@ -164,6 +211,12 @@ export async function registerRoutes(
     const event = await storage.createEvent(parsed.data);
     notionSync("createEvent", () => createNotionEvent(parsed.data));
     res.status(201).json(event);
+  });
+
+  app.delete("/api/events/:id", async (req, res) => {
+    const deleted = await storage.deleteEvent(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Termin nicht gefunden" });
+    res.json({ success: true });
   });
 
   // ── Tasks ──
@@ -193,6 +246,12 @@ export async function registerRoutes(
     });
 
     res.json(updated);
+  });
+
+  app.delete("/api/tasks/:id", async (req, res) => {
+    const deleted = await storage.deleteTask(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Aufgabe nicht gefunden" });
+    res.json({ success: true });
   });
 
   // ── Folders ──
@@ -299,6 +358,18 @@ export async function registerRoutes(
     const room = await storage.createMeetingRoom(parsed.data);
     notionSync("createMeetingRoom", () => createNotionMeetingRoom(parsed.data));
     res.status(201).json(room);
+  });
+
+  app.delete("/api/meeting-rooms/:id", async (req, res) => {
+    const deleted = await storage.deleteMeetingRoom(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Meeting-Raum nicht gefunden" });
+    res.json({ success: true });
+  });
+
+  app.delete("/api/polls/:id", async (req, res) => {
+    const deleted = await storage.deletePoll(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Abstimmung nicht gefunden" });
+    res.json({ success: true });
   });
 
   return httpServer;
