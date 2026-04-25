@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FolderOpen, FileText, Upload, Search, Folder, ArrowLeft, ExternalLink, Download } from "lucide-react";
-import { queryClient } from "@/lib/queryClient";
+import { FolderOpen, FileText, Upload, Search, Folder, ArrowLeft, ExternalLink, Download, FolderPlus } from "lucide-react";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Folder as FolderType, Document as DocType } from "@shared/schema";
 
@@ -63,6 +63,8 @@ export default function Documents() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadFolderId, setUploadFolderId] = useState<string>("");
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -83,6 +85,22 @@ export default function Documents() {
     bytes >= 1024 * 1024
       ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
       : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+  const createFolderMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await apiRequest("POST", "/api/folders", { name });
+      return res.json();
+    },
+    onSuccess: (folder: FolderType) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/folders"] });
+      setNewFolderOpen(false);
+      setNewFolderName("");
+      toast({ title: "Ordner angelegt", description: folder.name });
+    },
+    onError: (err: any) => {
+      toast({ title: "Fehler", description: err?.message || "Ordner konnte nicht angelegt werden", variant: "destructive" });
+    },
+  });
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
@@ -134,6 +152,48 @@ export default function Documents() {
           </h1>
           <p className="text-sm text-muted-foreground">Dateien und Ordner der Genossenschaft</p>
         </div>
+        <div className="flex items-center gap-2">
+        <Dialog open={newFolderOpen} onOpenChange={(open) => {
+          setNewFolderOpen(open);
+          if (!open) setNewFolderName("");
+        }}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline" data-testid="button-new-folder">
+              <FolderPlus className="w-4 h-4 mr-1" /> Neuer Ordner
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Neuen Ordner anlegen</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="folder-name">Ordnername</Label>
+                <Input
+                  id="folder-name"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  placeholder="z.\u202fB. Protokolle, F\u00f6rderantrag..."
+                  data-testid="input-folder-name"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newFolderName.trim() && !createFolderMutation.isPending) {
+                      createFolderMutation.mutate(newFolderName.trim());
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
+              <Button
+                onClick={() => createFolderMutation.mutate(newFolderName.trim())}
+                disabled={!newFolderName.trim() || createFolderMutation.isPending}
+                className="w-full"
+                data-testid="button-create-folder"
+              >
+                {createFolderMutation.isPending ? "Lege an\u2026" : "Anlegen"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
         <Dialog open={uploadOpen} onOpenChange={(open) => {
           setUploadOpen(open);
           if (!open) {
@@ -193,6 +253,7 @@ export default function Documents() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Search */}
