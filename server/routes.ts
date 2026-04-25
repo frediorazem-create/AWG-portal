@@ -34,7 +34,7 @@ import {
   searchNotionDatabase,
 } from "./notion";
 import { sendBulkMail, verifySmtp } from "./mailer";
-import { listInbox, getMail, getAttachment, setFlags, verifyImap } from "./imap";
+import { listInbox, getMail, getAttachment, setFlags, verifyImap, findSentMailbox } from "./imap";
 import multer from "multer";
 
 /** Fire-and-forget Notion sync — never blocks the response */
@@ -204,6 +204,47 @@ export async function registerRoutes(
       const uid = parseInt(req.params.uid, 10);
       const partId = req.params.partId;
       const att = await getAttachment(uid, partId);
+      if (!att) return res.status(404).json({ error: "Anhang nicht gefunden" });
+      res.setHeader("Content-Type", att.contentType);
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(att.filename)}"`);
+      res.send(att.content);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Postausgang / Gesendet (IMAP) ──
+  app.get("/api/sent", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(String(req.query.limit || "50"), 10) || 50, 200);
+      const search = req.query.search ? String(req.query.search) : undefined;
+      const mailbox = await findSentMailbox();
+      const result = await listInbox({ mailbox, limit, search });
+      res.json({ ...result, mailbox });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/sent/:uid", async (req, res) => {
+    try {
+      const uid = parseInt(req.params.uid, 10);
+      if (!uid) return res.status(400).json({ error: "Ungültige UID" });
+      const mailbox = await findSentMailbox();
+      const mail = await getMail(uid, mailbox);
+      if (!mail) return res.status(404).json({ error: "Nachricht nicht gefunden" });
+      res.json(mail);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/sent/:uid/attachments/:partId", async (req, res) => {
+    try {
+      const uid = parseInt(req.params.uid, 10);
+      const partId = req.params.partId;
+      const mailbox = await findSentMailbox();
+      const att = await getAttachment(uid, partId, mailbox);
       if (!att) return res.status(404).json({ error: "Anhang nicht gefunden" });
       res.setHeader("Content-Type", att.contentType);
       res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(att.filename)}"`);

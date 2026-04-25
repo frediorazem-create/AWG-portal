@@ -22,6 +22,7 @@ import {
   MailOpen,
   Download,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 
 interface Addr { name?: string; address: string; }
@@ -64,9 +65,12 @@ function displayFrom(f: Addr) {
   return f.name || f.address || "(unbekannt)";
 }
 
+type Folder = "inbox" | "sent";
+
 export default function Inbox() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [folder, setFolder] = useState<Folder>("inbox");
   const [selectedUid, setSelectedUid] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [searchDebounced, setSearchDebounced] = useState("");
@@ -75,6 +79,12 @@ export default function Inbox() {
   const [replyBody, setReplyBody] = useState("");
   const [replyFiles, setReplyFiles] = useState<File[]>([]);
   const [sendingReply, setSendingReply] = useState(false);
+
+  // Auswahl zurücksetzen, wenn der Ordner gewechselt wird
+  useEffect(() => { setSelectedUid(null); setReplyOpen(false); }, [folder]);
+
+  const apiBase = folder === "sent" ? "/api/sent" : "/api/inbox";
+  const isSent = folder === "sent";
 
   useEffect(() => {
     apiRequest("GET", "/api/inbox/status")
@@ -90,9 +100,9 @@ export default function Inbox() {
   }, [search]);
 
   const listQuery = useQuery<{ items: MailListItem[]; total: number; unseen: number }>({
-    queryKey: ["/api/inbox", searchDebounced],
+    queryKey: [apiBase, searchDebounced],
     queryFn: async () => {
-      const url = "/api/inbox" + (searchDebounced ? `?search=${encodeURIComponent(searchDebounced)}` : "");
+      const url = apiBase + (searchDebounced ? `?search=${encodeURIComponent(searchDebounced)}` : "");
       const r = await apiRequest("GET", url);
       return r.json();
     },
@@ -101,9 +111,9 @@ export default function Inbox() {
   });
 
   const detailQuery = useQuery<MailDetail>({
-    queryKey: ["/api/inbox", selectedUid],
+    queryKey: [apiBase, selectedUid],
     queryFn: async () => {
-      const r = await apiRequest("GET", `/api/inbox/${selectedUid}`);
+      const r = await apiRequest("GET", `${apiBase}/${selectedUid}`);
       return r.json();
     },
     enabled: !!selectedUid && !!imapStatus?.ok,
@@ -120,9 +130,10 @@ export default function Inbox() {
     },
   });
 
-  // Auto-mark as read when opening
+  // Auto-mark as read when opening (nur für Posteingang — im Postausgang sind alle
+  // Mails ohnehin gelesen, und unsere Flag-Routes laufen gegen INBOX)
   useEffect(() => {
-    if (detailQuery.data && detailQuery.data.unread) {
+    if (!isSent && detailQuery.data && detailQuery.data.unread) {
       flagsMutation.mutate({ uid: detailQuery.data.uid, flags: { seen: true } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,13 +201,23 @@ export default function Inbox() {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto h-[calc(100vh-2rem)] flex flex-col">
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <div className="flex items-center gap-2">
-          <InboxIcon className="w-5 h-5 text-primary" />
-          <h1 className="text-xl font-semibold" data-testid="text-inbox-title">Posteingang</h1>
+      <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <InboxIcon className="w-5 h-5 text-primary" />
+            <h1 className="text-xl font-semibold" data-testid="text-inbox-title">
+              {isSent ? "Postausgang" : "Posteingang"}
+            </h1>
+          </div>
+          <Tabs value={folder} onValueChange={(v) => setFolder(v as Folder)}>
+            <TabsList>
+              <TabsTrigger value="inbox" data-testid="tab-inbox">Posteingang</TabsTrigger>
+              <TabsTrigger value="sent" data-testid="tab-sent">Gesendet</TabsTrigger>
+            </TabsList>
+          </Tabs>
           {listQuery.data && (
             <Badge variant="secondary" className="ml-1">
-              {listQuery.data.unseen} ungelesen / {listQuery.data.total}
+              {isSent ? `${listQuery.data.total} Nachrichten` : `${listQuery.data.unseen} ungelesen / ${listQuery.data.total}`}
             </Badge>
           )}
         </div>
@@ -241,7 +262,9 @@ export default function Inbox() {
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <span className={`text-sm truncate ${m.unread ? "font-semibold" : ""}`}>
-                    {displayFrom(m.from)}
+                    {isSent
+                      ? (m.to.length === 0 ? "(keine Empfänger)" : `An: ${m.to.map(displayFrom).join(", ")}`)
+                      : displayFrom(m.from)}
                   </span>
                   <span className="text-xs text-muted-foreground shrink-0">{formatDate(m.date)}</span>
                 </div>
@@ -300,41 +323,45 @@ export default function Inbox() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Button size="sm" onClick={() => setReplyOpen(v => !v)} data-testid="button-reply">
-                    <Reply className="w-4 h-4 mr-2" />
-                    Antworten
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => flagsMutation.mutate({ uid: detailQuery.data!.uid, flags: { flagged: !detailQuery.data!.flagged } })}
-                    data-testid="button-star"
-                  >
-                    <Star className={`w-4 h-4 mr-2 ${detailQuery.data.flagged ? "text-yellow-500 fill-yellow-500" : ""}`} />
-                    {detailQuery.data.flagged ? "Markierung entfernen" : "Markieren"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => flagsMutation.mutate({ uid: detailQuery.data!.uid, flags: { seen: !detailQuery.data!.unread ? false : true } })}
-                    data-testid="button-toggle-read"
-                  >
-                    {detailQuery.data.unread ? <MailOpen className="w-4 h-4 mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
-                    {detailQuery.data.unread ? "Als gelesen" : "Als ungelesen"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (confirm("Diese Nachricht in den Papierkorb verschieben?")) {
-                        flagsMutation.mutate({ uid: detailQuery.data!.uid, flags: { deleted: true } });
-                      }
-                    }}
-                    data-testid="button-delete"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Löschen
-                  </Button>
+                  {!isSent && (
+                    <>
+                      <Button size="sm" onClick={() => setReplyOpen(v => !v)} data-testid="button-reply">
+                        <Reply className="w-4 h-4 mr-2" />
+                        Antworten
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => flagsMutation.mutate({ uid: detailQuery.data!.uid, flags: { flagged: !detailQuery.data!.flagged } })}
+                        data-testid="button-star"
+                      >
+                        <Star className={`w-4 h-4 mr-2 ${detailQuery.data.flagged ? "text-yellow-500 fill-yellow-500" : ""}`} />
+                        {detailQuery.data.flagged ? "Markierung entfernen" : "Markieren"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => flagsMutation.mutate({ uid: detailQuery.data!.uid, flags: { seen: !detailQuery.data!.unread ? false : true } })}
+                        data-testid="button-toggle-read"
+                      >
+                        {detailQuery.data.unread ? <MailOpen className="w-4 h-4 mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
+                        {detailQuery.data.unread ? "Als gelesen" : "Als ungelesen"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          if (confirm("Diese Nachricht in den Papierkorb verschieben?")) {
+                            flagsMutation.mutate({ uid: detailQuery.data!.uid, flags: { deleted: true } });
+                          }
+                        }}
+                        data-testid="button-delete"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Löschen
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -344,7 +371,7 @@ export default function Inbox() {
                     {detailQuery.data.attachments.map((a, i) => (
                       <a
                         key={i}
-                        href={`${import.meta.env.VITE_API_BASE || ""}/api/inbox/${detailQuery.data!.uid}/attachments/${encodeURIComponent(a.partId)}`}
+                        href={`${import.meta.env.VITE_API_BASE || ""}${apiBase}/${detailQuery.data!.uid}/attachments/${encodeURIComponent(a.partId)}`}
                         className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent/40"
                         data-testid={`link-attachment-${i}`}
                         download={a.filename}

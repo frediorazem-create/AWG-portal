@@ -33,8 +33,9 @@ const categoryColor: Record<string, string> = {
 };
 
 export default function CalendarPage() {
-  const [currentMonth, setCurrentMonth] = useState(2); // March (0-indexed)
-  const [currentYear, setCurrentYear] = useState(2026);
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", date: "", time: "", endTime: "", location: "", category: "Treffen" });
 
@@ -73,8 +74,11 @@ export default function CalendarPage() {
     setCurrentYear(y);
   };
 
+  // Heutiges Datum als YYYY-MM-DD für String-Vergleich auf den ISO-Datumsfeldern
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
   const upcomingEvents = events
-    ?.filter((e) => e.date >= "2026-03-16")
+    ?.filter((e) => e.date >= todayStr)
     .slice(0, 5) ?? [];
 
   return (
@@ -175,7 +179,10 @@ export default function CalendarPage() {
                 {Array.from({ length: daysInMonth }).map((_, i) => {
                   const day = i + 1;
                   const dayEvents = eventsOnDay(day);
-                  const isToday = day === 16 && currentMonth === 2 && currentYear === 2026;
+                  const isToday =
+                    day === today.getDate() &&
+                    currentMonth === today.getMonth() &&
+                    currentYear === today.getFullYear();
                   return (
                     <div
                       key={day}

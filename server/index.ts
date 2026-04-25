@@ -50,7 +50,10 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        // Log-Zeile kürzen — sonst wird bei base64-Bildern (profileImage, fileData)
+        // mehrere MB pro Request geloggt, was Render-Logs flutet und Latenz erhöht.
+        const json = JSON.stringify(capturedJsonResponse);
+        logLine += ` :: ${json.length > 200 ? json.slice(0, 200) + `… (${json.length} bytes)` : json}`;
       }
 
       log(logLine);

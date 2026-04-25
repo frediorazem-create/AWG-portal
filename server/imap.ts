@@ -250,6 +250,35 @@ export async function setFlags(uid: number, flags: { seen?: boolean; flagged?: b
   }
 }
 
+// Findet den "Gesendet"-Ordner. IMAP-Server benennen ihn unterschiedlich:
+// IONOS: "Sent", Apple: "Sent Messages", Outlook: "Sent Items", deutsch: "Gesendet".
+// Wir bevorzugen den Special-Use-Flag \Sent, fallen ansonsten auf einen Namens-Match zurück.
+let cachedSentMailbox: string | null = null;
+export async function findSentMailbox(): Promise<string> {
+  if (cachedSentMailbox) return cachedSentMailbox;
+  if (!getConfigured()) throw new Error("IMAP nicht konfiguriert");
+  const client = await openClient();
+  try {
+    const list = await client.list();
+    // 1) Special-Use \Sent
+    const bySpecial = list.find((m: any) => Array.isArray(m.specialUse) ? m.specialUse.includes("\\Sent") : m.specialUse === "\\Sent");
+    if (bySpecial) { cachedSentMailbox = bySpecial.path; return bySpecial.path; }
+    // 2) Namens-Match (englische und deutsche Varianten)
+    const candidates = ["Sent", "INBOX.Sent", "Sent Items", "Sent Messages", "Gesendet", "Gesendete Objekte", "Gesendete Elemente", "INBOX.Gesendet"];
+    const lowerMap = new Map(list.map((m: any) => [m.path.toLowerCase(), m.path]));
+    for (const c of candidates) {
+      const hit = lowerMap.get(c.toLowerCase());
+      if (hit) { cachedSentMailbox = hit; return hit; }
+    }
+    // 3) Fallback: irgendeine Box mit "sent" oder "gesendet" im Namen
+    const fuzzy = list.find((m: any) => /sent|gesendet/i.test(m.path));
+    if (fuzzy) { cachedSentMailbox = fuzzy.path; return fuzzy.path; }
+    throw new Error("Kein Postausgang-Ordner gefunden");
+  } finally {
+    await client.logout();
+  }
+}
+
 export async function verifyImap(): Promise<{ ok: boolean; error?: string; mailboxes?: string[] }> {
   if (!getConfigured()) return { ok: false, error: "IMAP_PASS nicht gesetzt" };
   try {
