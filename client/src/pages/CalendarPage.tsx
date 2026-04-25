@@ -9,9 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { Event as CalEvent } from "@shared/schema";
+
+type EventForm = { title: string; description: string; date: string; time: string; endTime: string; location: string; category: string };
+const emptyForm: EventForm = { title: "", description: "", date: "", time: "", endTime: "", location: "", category: "Treffen" };
 
 const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -37,18 +41,75 @@ export default function CalendarPage() {
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", date: "", time: "", endTime: "", location: "", category: "Treffen" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<EventForm>(emptyForm);
+  const { toast } = useToast();
 
   const { data: events, isLoading } = useQuery<CalEvent[]>({ queryKey: ["/api/events"] });
 
-  const createMutation = useMutation({
+  const closeDialog = () => {
+    setOpen(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const openNew = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setOpen(true);
+  };
+
+  const openEdit = (e: CalEvent) => {
+    setEditingId(e.id);
+    setForm({
+      title: e.title,
+      description: e.description || "",
+      date: e.date,
+      time: e.time || "",
+      endTime: e.endTime || "",
+      location: e.location || "",
+      category: e.category,
+    });
+    setOpen(true);
+  };
+
+  const saveMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/events", form);
+      // Leere Strings als null senden, damit nichts wie "" in optionalen Feldern landet
+      const payload = {
+        ...form,
+        description: form.description || null,
+        time: form.time || null,
+        endTime: form.endTime || null,
+        location: form.location || null,
+      };
+      if (editingId) {
+        await apiRequest("PATCH", `/api/events/${editingId}`, payload);
+      } else {
+        await apiRequest("POST", "/api/events", payload);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      setOpen(false);
-      setForm({ title: "", description: "", date: "", time: "", endTime: "", location: "", category: "Treffen" });
+      toast({ title: editingId ? "Termin aktualisiert" : "Termin erstellt" });
+      closeDialog();
+    },
+    onError: (err: any) => {
+      toast({ title: "Speichern fehlgeschlagen", description: err?.message || "Unbekannter Fehler", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/events/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      toast({ title: "Termin gel\u00f6scht" });
+      closeDialog();
+    },
+    onError: (err: any) => {
+      toast({ title: "L\u00f6schen fehlgeschlagen", description: err?.message || "Unbekannter Fehler", variant: "destructive" });
     },
   });
 
@@ -90,15 +151,13 @@ export default function CalendarPage() {
           </h1>
           <p className="text-sm text-muted-foreground">Termine und Veranstaltungen</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" data-testid="button-new-event">
-              <Plus className="w-4 h-4 mr-1" /> Neuer Termin
-            </Button>
-          </DialogTrigger>
+        <Button size="sm" data-testid="button-new-event" onClick={openNew}>
+          <Plus className="w-4 h-4 mr-1" /> Neuer Termin
+        </Button>
+        <Dialog open={open} onOpenChange={(o) => { if (!o) closeDialog(); else setOpen(true); }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Neuen Termin erstellen</DialogTitle>
+              <DialogTitle>{editingId ? "Termin bearbeiten" : "Neuen Termin erstellen"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <div>
@@ -141,9 +200,29 @@ export default function CalendarPage() {
                 <Label>Beschreibung</Label>
                 <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} data-testid="input-event-description" />
               </div>
-              <Button onClick={() => createMutation.mutate()} disabled={!form.title || !form.date || createMutation.isPending} className="w-full" data-testid="button-submit-event">
-                Termin erstellen
-              </Button>
+              <div className="flex flex-col-reverse sm:flex-row gap-2">
+                {editingId && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      if (confirm("Diesen Termin wirklich l\u00f6schen?")) deleteMutation.mutate(editingId);
+                    }}
+                    disabled={deleteMutation.isPending}
+                    data-testid="button-delete-event"
+                    className="sm:flex-shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" /> Löschen
+                  </Button>
+                )}
+                <Button
+                  onClick={() => saveMutation.mutate()}
+                  disabled={!form.title || !form.date || saveMutation.isPending}
+                  className="w-full"
+                  data-testid="button-submit-event"
+                >
+                  {saveMutation.isPending ? "Speichere\u2026" : (editingId ? "\u00c4nderungen speichern" : "Termin erstellen")}
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -192,9 +271,16 @@ export default function CalendarPage() {
                       <span className={`text-xs font-medium ${isToday ? "text-primary" : ""}`}>{day}</span>
                       <div className="space-y-0.5 mt-0.5">
                         {dayEvents.slice(0, 2).map((e) => (
-                          <div key={e.id} className={`text-[9px] leading-tight px-1 py-0.5 rounded truncate ${categoryColor[e.category] || "bg-muted"}`}>
+                          <button
+                            key={e.id}
+                            type="button"
+                            onClick={() => openEdit(e)}
+                            className={`block w-full text-left text-[9px] leading-tight px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80 ${categoryColor[e.category] || "bg-muted"}`}
+                            data-testid={`event-pill-${e.id}`}
+                            title={`${e.title} \u2014 zum Bearbeiten klicken`}
+                          >
                             {e.title}
-                          </div>
+                          </button>
                         ))}
                         {dayEvents.length > 2 && (
                           <div className="text-[9px] text-muted-foreground">+{dayEvents.length - 2} weitere</div>
@@ -218,7 +304,13 @@ export default function CalendarPage() {
               Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)
             ) : (
               upcomingEvents.map((e) => (
-                <div key={e.id} className="p-3 rounded-lg border space-y-1" data-testid={`event-card-${e.id}`}>
+                <div
+                  key={e.id}
+                  className="p-3 rounded-lg border space-y-1 cursor-pointer hover:bg-accent/40 transition-colors"
+                  data-testid={`event-card-${e.id}`}
+                  onClick={() => openEdit(e)}
+                  title="Zum Bearbeiten klicken"
+                >
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className={`text-[10px] ${categoryColor[e.category] || ""}`}>{e.category}</Badge>
                     <span className="text-xs text-muted-foreground">

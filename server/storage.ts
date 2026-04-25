@@ -50,6 +50,7 @@ export interface IStorage {
   // Events
   getEvents(): Promise<Event[]>;
   createEvent(event: InsertEvent): Promise<Event>;
+  updateEvent(id: string, patch: Partial<InsertEvent>): Promise<Event | undefined>;
   deleteEvent(id: string): Promise<boolean>;
 
   // Tasks
@@ -653,6 +654,22 @@ export class SqliteStorage implements IStorage {
       VALUES (@id, @title, @description, @date, @time, @endTime, @location, @category)
     `).run(event);
     return event;
+  }
+  async updateEvent(id: string, patch: Partial<InsertEvent>): Promise<Event | undefined> {
+    const allowed: (keyof InsertEvent)[] = ["title", "description", "date", "time", "endTime", "location", "category"];
+    const sets: string[] = [];
+    const params: any = { id };
+    for (const key of allowed) {
+      if (key in patch) {
+        sets.push(`${key} = @${key}`);
+        params[key] = (patch as any)[key] ?? null;
+      }
+    }
+    if (sets.length === 0) {
+      return this.db.prepare("SELECT * FROM events WHERE id = ?").get(id) as Event | undefined;
+    }
+    this.db.prepare(`UPDATE events SET ${sets.join(", ")} WHERE id = @id`).run(params);
+    return this.db.prepare("SELECT * FROM events WHERE id = ?").get(id) as Event | undefined;
   }
   async deleteEvent(id: string): Promise<boolean> {
     return this.db.prepare("DELETE FROM events WHERE id = ?").run(id).changes > 0;

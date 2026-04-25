@@ -343,6 +343,15 @@ export async function registerRoutes(
     res.status(201).json(event);
   });
 
+  app.patch("/api/events/:id", async (req, res) => {
+    // partielles Update — wir validieren mit dem Insert-Schema im partial-Modus
+    const parsed = insertEventSchema.partial().safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
+    const updated = await storage.updateEvent(req.params.id, parsed.data);
+    if (!updated) return res.status(404).json({ error: "Termin nicht gefunden" });
+    res.json(updated);
+  });
+
   app.delete("/api/events/:id", async (req, res) => {
     const deleted = await storage.deleteEvent(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Termin nicht gefunden" });
