@@ -125,11 +125,15 @@ export type Folder = typeof folders.$inferSelect;
 export const documents = pgTable("documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  type: text("type").notNull(), // pdf, docx, xlsx, etc.
+  type: text("type").notNull(), // pdf, docx, xlsx, md, etc.
   size: text("size").notNull(), // human-readable size
   folderId: varchar("folder_id").notNull(),
   uploadedBy: text("uploaded_by").notNull(),
   uploadedAt: text("uploaded_at").notNull(),
+  content: text("content"),       // Markdown content (for native md docs)
+  notionUrl: text("notion_url"),  // Original Notion source URL
+  mimeType: text("mime_type"),    // MIME-Typ der hochgeladenen Datei
+  fileData: text("file_data"),    // Base64-kodierter Datei-Inhalt
 });
 
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true });

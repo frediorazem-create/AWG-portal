@@ -383,6 +383,64 @@ export async function registerRoutes(
     res.status(201).json(doc);
   });
 
+  // Echter Datei-Upload vom Computer (multipart/form-data).
+  // multer ist oben bereits konfiguriert (15 MB pro Datei, in-Memory).
+  app.post("/api/documents/upload", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "Keine Datei übergeben" });
+      const folderId = (req.body.folderId || "").toString();
+      if (!folderId) return res.status(400).json({ error: "Ordner fehlt" });
+      const uploadedBy = (req.body.uploadedBy || "Unbekannt").toString();
+
+      const original = req.file.originalname;
+      const ext = (original.split(".").pop() || "bin").toLowerCase();
+      const sizeBytes = req.file.size;
+      const sizeHuman = sizeBytes >= 1024 * 1024
+        ? `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`
+        : `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
+      const fileData = req.file.buffer.toString("base64");
+
+      const doc = await storage.createDocument({
+        name: original,
+        type: ext,
+        size: sizeHuman,
+        folderId,
+        uploadedBy,
+        uploadedAt: new Date().toISOString(),
+        content: null,
+        notionUrl: null,
+        mimeType: req.file.mimetype || "application/octet-stream",
+        fileData,
+      } as any);
+
+      // Antwort ohne fileData (sonst groß)
+      const { fileData: _omit, ...slim } = doc as any;
+      res.status(201).json(slim);
+    } catch (err: any) {
+      console.error("upload failed", err);
+      res.status(500).json({ error: err?.message || "Upload fehlgeschlagen" });
+    }
+  });
+
+  // Datei-Download — liefert die gespeicherten Bytes mit korrektem MIME-Typ aus.
+  app.get("/api/documents/:id/download", async (req, res) => {
+    try {
+      const doc = await storage.getDocument(req.params.id);
+      if (!doc) return res.status(404).json({ error: "Dokument nicht gefunden" });
+      const data = (doc as any).fileData as string | null | undefined;
+      if (!data) return res.status(404).json({ error: "Keine Datei zu diesem Dokument hinterlegt" });
+      const buf = Buffer.from(data, "base64");
+      const mime = (doc as any).mimeType || "application/octet-stream";
+      res.setHeader("Content-Type", mime);
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.name)}"`);
+      res.setHeader("Content-Length", String(buf.length));
+      res.end(buf);
+    } catch (err: any) {
+      console.error("download failed", err);
+      res.status(500).json({ error: err?.message || "Download fehlgeschlagen" });
+    }
+  });
+
   // ── Polls ──
   app.get("/api/polls", async (_req, res) => {
     const polls = await storage.getPolls();

@@ -57,21 +57,70 @@ interface MemberForm {
 const emptyForm: MemberForm = { name: "", email: "", phone: "", role: "Mitglied", address: "", website: "", profileImage: "" };
 
 /* ── Profile Image Picker ── */
+
+// Skaliert und komprimiert ein Bild zu einem quadratischen 512x512 JPEG (center-crop).
+// Ergebnis: typischerweise 80-300 KB bei Qualität 0.85.
+async function processImage(file: File): Promise<string> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    const url = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    image.src = url;
+  });
+
+  const TARGET = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = TARGET;
+  canvas.height = TARGET;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas nicht verfügbar");
+
+  // Center-Crop: kürzere Seite als Basis, längere Seite mittig beschneiden
+  const side = Math.min(img.width, img.height);
+  const sx = (img.width - side) / 2;
+  const sy = (img.height - side) / 2;
+
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, TARGET, TARGET);
+  ctx.drawImage(img, sx, sy, side, side, 0, 0, TARGET, TARGET);
+
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
 function ProfileImagePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [processing, setProcessing] = useState(false);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      alert("Bild darf maximal 2 MB groß sein.");
+    // Großzügiges Upload-Limit — wird eh komprimiert
+    if (file.size > 15 * 1024 * 1024) {
+      alert("Bild darf maximal 15 MB groß sein.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") onChange(reader.result);
-    };
-    reader.readAsDataURL(file);
+    if (!file.type.startsWith("image/")) {
+      alert("Bitte eine Bild-Datei auswählen.");
+      return;
+    }
+    setProcessing(true);
+    try {
+      const dataUrl = await processImage(file);
+      onChange(dataUrl);
+    } catch (err) {
+      console.error(err);
+      alert("Bild konnte nicht verarbeitet werden.");
+    } finally {
+      setProcessing(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
   return (
@@ -97,12 +146,12 @@ function ProfileImagePicker({ value, onChange }: { value: string; onChange: (v: 
         )}
       </div>
       <div>
-        <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-          <Camera className="w-3 h-3 mr-1" /> Bild wählen
+        <Button type="button" variant="outline" size="sm" disabled={processing} onClick={() => fileRef.current?.click()}>
+          <Camera className="w-3 h-3 mr-1" /> {processing ? "Wird verarbeitet…" : "Bild wählen"}
         </Button>
-        <p className="text-[10px] text-muted-foreground mt-1">JPG oder PNG, max. 2 MB</p>
+        <p className="text-[10px] text-muted-foreground mt-1">JPG, PNG oder HEIC — wird automatisch auf 512×512 zugeschnitten</p>
       </div>
-      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFile} />
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
     </div>
   );
 }

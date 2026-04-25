@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, cp, access } from "fs/promises";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -59,6 +59,15 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  // Daten-Ordner (Notion-Dokumente) mit ins dist/ kopieren
+  try {
+    await access("server/data");
+    console.log("copying server/data → dist/data");
+    await cp("server/data", "dist/data", { recursive: true });
+  } catch {
+    console.log("server/data nicht vorhanden — überspringe");
+  }
 }
 
 buildAll().catch((err) => {

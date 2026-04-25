@@ -15,8 +15,9 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import Database from "better-sqlite3";
-import { existsSync, mkdirSync } from "fs";
-import { dirname } from "path";
+import { existsSync, mkdirSync, readFileSync, statSync } from "fs";
+import { dirname, join, resolve } from "path";
+import { fileURLToPath } from "url";
 
 export interface IStorage {
   // Users
@@ -63,6 +64,7 @@ export interface IStorage {
 
   // Documents
   getDocuments(): Promise<Document[]>;
+  getDocument(id: string): Promise<Document | undefined>;
   getDocumentsByFolder(folderId: string): Promise<Document[]>;
   createDocument(document: InsertDocument): Promise<Document>;
 
@@ -137,7 +139,31 @@ export class SqliteStorage implements IStorage {
     this.db.pragma("foreign_keys = ON");
 
     this.createTables();
+    this.migrateSchema();
     this.seedIfEmpty();
+    this.seedNotionDocuments();
+  }
+
+  // Migrate older DB schemas: add columns that were introduced later.
+  private migrateSchema() {
+    const cols = this.db.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
+    const has = (n: string) => cols.some((c) => c.name === n);
+    if (!has("content")) {
+      console.log("[storage] migrate: ALTER documents ADD COLUMN content");
+      this.db.exec("ALTER TABLE documents ADD COLUMN content TEXT");
+    }
+    if (!has("notionUrl")) {
+      console.log("[storage] migrate: ALTER documents ADD COLUMN notionUrl");
+      this.db.exec("ALTER TABLE documents ADD COLUMN notionUrl TEXT");
+    }
+    if (!has("mimeType")) {
+      console.log("[storage] migrate: ALTER documents ADD COLUMN mimeType");
+      this.db.exec("ALTER TABLE documents ADD COLUMN mimeType TEXT");
+    }
+    if (!has("fileData")) {
+      console.log("[storage] migrate: ALTER documents ADD COLUMN fileData");
+      this.db.exec("ALTER TABLE documents ADD COLUMN fileData TEXT");
+    }
   }
 
   private createTables() {
@@ -216,7 +242,11 @@ export class SqliteStorage implements IStorage {
         size TEXT NOT NULL,
         folderId TEXT NOT NULL,
         uploadedBy TEXT NOT NULL,
-        uploadedAt TEXT NOT NULL
+        uploadedAt TEXT NOT NULL,
+        content TEXT,
+        notionUrl TEXT,
+        mimeType TEXT,
+        fileData TEXT
       );
       CREATE TABLE IF NOT EXISTS polls (
         id TEXT PRIMARY KEY,
@@ -333,6 +363,140 @@ export class SqliteStorage implements IStorage {
     });
 
     console.log(`[storage] Seeded ${initialMembers.length} members, ${channels.length} channels, 1 poll, ${rooms.length} rooms`);
+  }
+
+  // ── Notion Documents Seed ──
+  // Importiert die exportierten Notion-Markdown-Dokumente aus server/data/dokumente/
+  // beim ersten Start (oder wenn neue Dokumente hinzugekommen sind).
+  // Idempotent: prüft pro Dokument anhand notionUrl, ob es bereits in der DB ist.
+  private seedNotionDocuments() {
+    const dataDir = this.findDokumenteDir();
+    if (!dataDir) {
+      console.log("[storage] Notion-Dokumente-Ordner nicht gefunden — überspringe");
+      return;
+    }
+
+    const indexPath = join(dataDir, "index.json");
+    if (!existsSync(indexPath)) {
+      console.log("[storage] index.json nicht gefunden in", dataDir);
+      return;
+    }
+
+    let index: any;
+    try {
+      index = JSON.parse(readFileSync(indexPath, "utf8"));
+    } catch (e) {
+      console.error("[storage] Fehler beim Lesen von index.json:", e);
+      return;
+    }
+
+    const docs: Array<{ titel: string; kategorie: string; datei: string; notion_url: string }> =
+      index.dokumente || [];
+
+    if (docs.length === 0) {
+      console.log("[storage] Keine Dokumente in index.json");
+      return;
+    }
+
+    // Mapping: Kategorie-Key → Anzeigename des Folders
+    const folderNames: Record<string, string> = {
+      "01-Satzung-Recht": "01 Satzung & Recht",
+      "02-Foerderantrag": "02 Förderantrag (BayStMAS)",
+      "03-Geschaeftsmodell": "03 Geschäftsmodell & Finanzierung",
+      "04-Termine-Protokolle": "04 Termine & Protokolle",
+      "05-Kommunikation-Name": "05 Kommunikation & Name/Marke",
+    };
+
+    // 1. Folders sicherstellen
+    const folderIdByKey: Record<string, string> = {};
+    const getFolderStmt = this.db.prepare("SELECT id FROM folders WHERE name = ?");
+    const insertFolderStmt = this.db.prepare(
+      "INSERT INTO folders (id, name, parentId) VALUES (?, ?, NULL)"
+    );
+
+    for (const [key, name] of Object.entries(folderNames)) {
+      const existing = getFolderStmt.get(name) as { id: string } | undefined;
+      if (existing) {
+        folderIdByKey[key] = existing.id;
+      } else {
+        const id = randomUUID();
+        insertFolderStmt.run(id, name);
+        folderIdByKey[key] = id;
+        console.log(`[storage] Folder erstellt: ${name}`);
+      }
+    }
+
+    // 2. Documents einfügen (Duplikate vermeiden über notionUrl)
+    const checkStmt = this.db.prepare(
+      "SELECT id FROM documents WHERE notionUrl = ?"
+    );
+    const insertDocStmt = this.db.prepare(`
+      INSERT INTO documents (id, name, type, size, folderId, uploadedBy, uploadedAt, content, notionUrl)
+      VALUES (?, ?, 'md', ?, ?, ?, ?, ?, ?)
+    `);
+
+    const today = new Date().toISOString().slice(0, 10);
+    let added = 0;
+    let skipped = 0;
+
+    for (const doc of docs) {
+      if (!doc.notion_url) continue;
+      const exists = checkStmt.get(doc.notion_url) as { id: string } | undefined;
+      if (exists) {
+        skipped++;
+        continue;
+      }
+
+      const folderId = folderIdByKey[doc.kategorie];
+      if (!folderId) {
+        console.warn(`[storage] Unbekannte Kategorie: ${doc.kategorie}`);
+        continue;
+      }
+
+      const filePath = join(dataDir, doc.datei);
+      let content = "";
+      let sizeStr = "–";
+      try {
+        content = readFileSync(filePath, "utf8");
+        const bytes = statSync(filePath).size;
+        sizeStr = bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 102.4) / 10} KB`;
+      } catch (e) {
+        console.warn(`[storage] Datei nicht lesbar: ${filePath}`);
+        continue;
+      }
+
+      insertDocStmt.run(
+        randomUUID(),
+        doc.titel,
+        sizeStr,
+        folderId,
+        "Notion-Import",
+        today,
+        content,
+        doc.notion_url
+      );
+      added++;
+    }
+
+    if (added > 0) console.log(`[storage] Notion-Import: ${added} neue Dokumente, ${skipped} bereits vorhanden`);
+    else console.log(`[storage] Notion-Import: alle ${skipped} Dokumente bereits vorhanden`);
+  }
+
+  // Sucht den Ordner mit den Notion-Markdown-Dokumenten.
+  // Im Build-Output liegt er unter dist/data/dokumente, im Dev unter server/data/dokumente.
+  private findDokumenteDir(): string | null {
+    const candidates = [
+      // Bundled mit dem Server (production)
+      resolve(process.cwd(), "dist/data/dokumente"),
+      // Dev/lokal
+      resolve(process.cwd(), "server/data/dokumente"),
+      // Falls Server aus dist/ läuft
+      resolve(process.cwd(), "data/dokumente"),
+    ];
+    for (const c of candidates) {
+      if (existsSync(c) && existsSync(join(c, "index.json"))) return c;
+    }
+    return null;
   }
 
   // ── Helpers ──
@@ -534,18 +698,39 @@ export class SqliteStorage implements IStorage {
   }
 
   // ── Documents ──
+  // Wir liefern bewusst KEINE fileData in den Listen-Endpoints aus
+  // (sonst werden Antworten gigantisch). Download-Route holt sie separat.
   async getDocuments(): Promise<Document[]> {
-    return this.db.prepare("SELECT * FROM documents").all() as Document[];
+    return this.db.prepare(
+      "SELECT id, name, type, size, folderId, uploadedBy, uploadedAt, content, notionUrl, mimeType, NULL as fileData FROM documents"
+    ).all() as Document[];
+  }
+  async getDocument(id: string): Promise<Document | undefined> {
+    return this.db.prepare("SELECT * FROM documents WHERE id = ?").get(id) as Document | undefined;
   }
   async getDocumentsByFolder(folderId: string): Promise<Document[]> {
-    return this.db.prepare("SELECT * FROM documents WHERE folderId = ?").all(folderId) as Document[];
+    return this.db.prepare(
+      "SELECT id, name, type, size, folderId, uploadedBy, uploadedAt, content, notionUrl, mimeType, NULL as fileData FROM documents WHERE folderId = ?"
+    ).all(folderId) as Document[];
   }
   async createDocument(d: InsertDocument): Promise<Document> {
     const id = randomUUID();
-    const doc: Document = { ...d, id };
+    const doc: Document = {
+      id,
+      name: d.name,
+      type: d.type,
+      size: d.size,
+      folderId: d.folderId,
+      uploadedBy: d.uploadedBy,
+      uploadedAt: d.uploadedAt,
+      content: (d as any).content ?? null,
+      notionUrl: (d as any).notionUrl ?? null,
+      mimeType: (d as any).mimeType ?? null,
+      fileData: (d as any).fileData ?? null,
+    };
     this.db.prepare(`
-      INSERT INTO documents (id, name, type, size, folderId, uploadedBy, uploadedAt)
-      VALUES (@id, @name, @type, @size, @folderId, @uploadedBy, @uploadedAt)
+      INSERT INTO documents (id, name, type, size, folderId, uploadedBy, uploadedAt, content, notionUrl, mimeType, fileData)
+      VALUES (@id, @name, @type, @size, @folderId, @uploadedBy, @uploadedAt, @content, @notionUrl, @mimeType, @fileData)
     `).run(doc);
     return doc;
   }
