@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Megaphone, Pin, Plus } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import type { Announcement } from "@shared/schema";
 
 export default function Announcements() {
@@ -20,6 +21,7 @@ export default function Announcements() {
   const [priority, setPriority] = useState("Normal");
 
   const { data: announcements, isLoading } = useQuery<Announcement[]>({ queryKey: ["/api/announcements"] });
+  const { isAdmin } = useAuth();
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -59,6 +61,7 @@ export default function Announcements() {
           </h1>
           <p className="text-sm text-muted-foreground">Wichtige Neuigkeiten der Genossenschaft</p>
         </div>
+        {isAdmin && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" data-testid="button-new-announcement">
@@ -97,6 +100,7 @@ export default function Announcements() {
             </div>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <div className="space-y-3">

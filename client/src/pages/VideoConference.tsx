@@ -22,6 +22,7 @@ import {
   Check,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import type { MeetingRoom } from "@shared/schema";
 
@@ -67,6 +68,7 @@ export default function VideoConference() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", description: "" });
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
 
   const { data: rooms, isLoading } = useQuery<MeetingRoom[]>({
     queryKey: ["/api/meeting-rooms"],
@@ -111,6 +113,7 @@ export default function VideoConference() {
             Jitsi Meet — kostenlose Videokonferenzen ohne App-Download
           </p>
         </div>
+        {isAdmin && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" data-testid="button-new-room">
@@ -154,6 +157,7 @@ export default function VideoConference() {
             </div>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Info banner */}

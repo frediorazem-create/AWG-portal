@@ -26,6 +26,7 @@ import {
   Check,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import type { Poll, PollOption } from "@shared/schema";
 
 /* ── WhatsApp-style Poll Card ── */
@@ -425,6 +426,7 @@ export default function Voting() {
   const { data: polls, isLoading } = useQuery<Poll[]>({
     queryKey: ["/api/polls"],
   });
+  const { isAdmin } = useAuth();
 
   const activePolls = polls?.filter((p) => p.status === "Aktiv") ?? [];
   const closedPolls = polls?.filter((p) => p.status === "Beendet") ?? [];
@@ -444,7 +446,7 @@ export default function Voting() {
             Umfragen und Entscheidungen der Genossenschaft
           </p>
         </div>
-        <CreatePollDialog />
+        {isAdmin && <CreatePollDialog />}
       </div>
 
       {isLoading ? (
@@ -477,9 +479,11 @@ export default function Voting() {
             <div className="text-center py-16 text-muted-foreground">
               <BarChart3 className="w-10 h-10 mx-auto mb-3 opacity-40" />
               <p className="text-sm">Noch keine Abstimmungen vorhanden</p>
-              <p className="text-xs mt-1">
-                Erstelle die erste Abstimmung mit dem Button oben.
-              </p>
+              {isAdmin && (
+                <p className="text-xs mt-1">
+                  Erstelle die erste Abstimmung mit dem Button oben.
+                </p>
+              )}
             </div>
           )}
         </>

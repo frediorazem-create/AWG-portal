@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Settings2, Plus, Pencil, Trash2, Bookmark } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import type { SidebarItem } from "@shared/schema";
 
 type FormState = {
@@ -27,6 +28,7 @@ export default function SidebarManage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
 
   const { data: items, isLoading } = useQuery<SidebarItem[]>({ queryKey: ["/api/sidebar-items"] });
 
@@ -85,6 +87,20 @@ export default function SidebarManage() {
       setForm(emptyForm);
     },
   });
+
+  if (!isAdmin) {
+    return (
+      <div className="p-4 md:p-6 max-w-3xl">
+        <Card>
+          <CardContent className="p-6 text-center space-y-2">
+            <Settings2 className="w-6 h-6 mx-auto text-muted-foreground" />
+            <p className="text-sm font-medium">Nur Admins können Bereiche verwalten.</p>
+            <p className="text-xs text-muted-foreground">Bitte einen Admin um Hilfe.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-3xl">

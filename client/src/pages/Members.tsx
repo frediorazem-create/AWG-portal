@@ -21,10 +21,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, Search, Mail, Phone, Pencil, UserPlus, MapPin, Globe, Camera, X } from "lucide-react";
+import { Users, Search, Mail, Phone, Pencil, UserPlus, MapPin, Globe, Camera, X, Shield, KeyRound } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Member } from "@shared/schema";
+import { useAuth } from "@/lib/auth";
 
 const roleColor: Record<string, string> = {
   Vorstand: "default",
@@ -206,7 +207,10 @@ export default function Members() {
   const [editForm, setEditForm] = useState<MemberForm>(emptyForm);
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState<MemberForm>(emptyForm);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwValue, setPwValue] = useState("");
   const { toast } = useToast();
+  const { user, isAdmin } = useAuth();
 
   const { data: members, isLoading } = useQuery<Member[]>({
     queryKey: ["/api/members"],
@@ -240,6 +244,41 @@ export default function Members() {
     },
     onError: () => {
       toast({ title: "Fehler", description: "Mitglied konnte nicht hinzugefügt werden.", variant: "destructive" });
+    },
+  });
+
+  const setPasswordMutation = useMutation({
+    mutationFn: async (data: { id: string; password: string }) => {
+      const res = await apiRequest("POST", `/api/members/${data.id}/set-password`, { password: data.password });
+      return res.json();
+    },
+    onSuccess: () => {
+      setPwOpen(false);
+      setPwValue("");
+      toast({ title: "Passwort gesetzt", description: "Das neue Passwort ist sofort aktiv." });
+    },
+    onError: (err: Error) => {
+      const msg = err.message.includes("400") ? "Passwort muss mindestens 8 Zeichen haben." : "Passwort konnte nicht gesetzt werden.";
+      toast({ title: "Fehler", description: msg, variant: "destructive" });
+    },
+  });
+
+  const setAdminMutation = useMutation({
+    mutationFn: async (data: { id: string; isAdmin: boolean }) => {
+      const res = await apiRequest("POST", `/api/members/${data.id}/set-admin`, { isAdmin: data.isAdmin });
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/members"] });
+      // Editing-Member auch aktualisieren, damit der Toggle-Status korrekt bleibt
+      if (editingMember && editingMember.id === vars.id) {
+        setEditingMember({ ...editingMember, isAdmin: vars.isAdmin });
+      }
+      toast({ title: "Aktualisiert", description: vars.isAdmin ? "Mitglied ist jetzt Admin." : "Admin-Rechte entzogen." });
+    },
+    onError: (err: Error) => {
+      const msg = err.message.includes("400") ? "Du kannst dir die Admin-Rechte nicht entziehen, wenn du der einzige Admin bist." : "Admin-Status konnte nicht geändert werden.";
+      toast({ title: "Fehler", description: msg, variant: "destructive" });
     },
   });
 
@@ -315,9 +354,11 @@ export default function Members() {
             {members?.length ?? 0} Mitglieder und Interessenten
           </p>
         </div>
-        <Button size="sm" onClick={() => { setAddForm(emptyForm); setAddOpen(true); }} data-testid="button-add-member">
-          <UserPlus className="w-4 h-4 mr-1" /> Hinzufügen
-        </Button>
+        {isAdmin && (
+          <Button size="sm" onClick={() => { setAddForm(emptyForm); setAddOpen(true); }} data-testid="button-add-member">
+            <UserPlus className="w-4 h-4 mr-1" /> Hinzufügen
+          </Button>
+        )}
       </div>
 
       <div className="relative max-w-sm">
@@ -336,9 +377,9 @@ export default function Members() {
           {filtered.map((member) => (
             <Card
               key={member.id}
-              className="group cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all"
+              className={`group transition-all ${isAdmin ? "cursor-pointer hover:ring-1 hover:ring-primary/30" : ""}`}
               data-testid={`member-card-${member.id}`}
-              onClick={() => openEdit(member)}
+              onClick={() => { if (isAdmin) openEdit(member); }}
             >
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
@@ -353,11 +394,20 @@ export default function Members() {
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold">{member.name}</span>
-                      <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                      {isAdmin && (
+                        <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                      )}
                     </div>
-                    <Badge variant={roleColor[member.role] as any} className="text-[10px]">
-                      {member.role}
-                    </Badge>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <Badge variant={roleColor[member.role] as any} className="text-[10px]">
+                        {member.role}
+                      </Badge>
+                      {(member as any).isAdmin && (
+                        <Badge variant="outline" className="text-[10px] border-primary/40 text-primary gap-1">
+                          <Shield className="w-2.5 h-2.5" /> Admin
+                        </Badge>
+                      )}
+                    </div>
                     <div className="space-y-0.5 pt-1">
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Mail className="w-3 h-3 shrink-0" />
@@ -410,13 +460,88 @@ export default function Members() {
         <p className="text-sm text-muted-foreground text-center py-8">Keine Mitglieder gefunden.</p>
       )}
 
-      {/* ── Edit Dialog ── */}
-      <Dialog open={!!editingMember} onOpenChange={(open) => { if (!open) setEditingMember(null); }}>
+      {/* ── Edit Dialog (nur Admin) ── */}
+      <Dialog open={!!editingMember} onOpenChange={(open) => { if (!open) { setEditingMember(null); setPwOpen(false); setPwValue(""); } }}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Mitglied bearbeiten</DialogTitle>
           </DialogHeader>
           <MemberFormFields form={editForm} setForm={setEditForm} />
+
+          {editingMember && (
+            <div className="border-t pt-4 space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Shield className="w-4 h-4" /> Admin-Bereich
+              </h3>
+
+              {/* Admin-Toggle */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <p className="text-sm">Admin-Rechte</p>
+                  <p className="text-xs text-muted-foreground">
+                    Admins dürfen Inhalte erstellen, bearbeiten und löschen.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant={editingMember.isAdmin ? "default" : "outline"}
+                  size="sm"
+                  disabled={setAdminMutation.isPending}
+                  onClick={() => setAdminMutation.mutate({ id: editingMember.id, isAdmin: !editingMember.isAdmin })}
+                  data-testid="button-toggle-admin"
+                >
+                  {editingMember.isAdmin ? "Admin entziehen" : "Zu Admin machen"}
+                </Button>
+              </div>
+
+              {/* Passwort-Setzen */}
+              {!pwOpen ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <p className="text-sm">Passwort setzen</p>
+                    <p className="text-xs text-muted-foreground">
+                      Vergibt ein neues Passwort und ermöglicht Login (mind. 8 Zeichen).
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => { setPwValue(""); setPwOpen(true); }} data-testid="button-open-set-password">
+                    <KeyRound className="w-3 h-3 mr-1" /> Setzen
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2 rounded-md border p-3 bg-muted/30">
+                  <Label className="text-xs">Neues Passwort für {editingMember.name}</Label>
+                  <Input
+                    type="text"
+                    value={pwValue}
+                    onChange={(e) => setPwValue(e.target.value)}
+                    placeholder="Mindestens 8 Zeichen"
+                    autoFocus
+                    data-testid="input-set-password"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => { setPwOpen(false); setPwValue(""); }}>
+                      Abbrechen
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={pwValue.length < 8 || setPasswordMutation.isPending}
+                      onClick={() => setPasswordMutation.mutate({ id: editingMember.id, password: pwValue })}
+                      data-testid="button-confirm-set-password"
+                    >
+                      {setPasswordMutation.isPending ? "Speichert…" : "Speichern"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {user?.id === editingMember.id && (
+                <p className="text-[11px] text-muted-foreground">
+                  Hinweis: Das ist dein eigenes Konto. Wenn du der einzige Admin bist, kannst du dir die Rechte nicht entziehen.
+                </p>
+              )}
+            </div>
+          )}
+
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setEditingMember(null)}>Abbrechen</Button>
             <Button onClick={handleSave} disabled={updateMutation.isPending}>

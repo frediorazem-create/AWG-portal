@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { attachAuth, ensureAdminBootstrap } from "./auth";
 
 const app = express();
 const httpServer = createServer(app);
@@ -22,6 +23,9 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false, limit: "15mb" }));
+
+// Authentifizierung: liest Session-Cookie und hängt currentMember an Request
+app.use(attachAuth);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -64,6 +68,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Admin-Konto sicherstellen + ggf. Start-Passwort generieren (in Logs)
+  await ensureAdminBootstrap();
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

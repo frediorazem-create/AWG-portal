@@ -36,6 +36,7 @@ import {
 import { sendBulkMail, verifySmtp } from "./mailer";
 import { listInbox, getMail, getAttachment, setFlags, verifyImap, findSentMailbox } from "./imap";
 import multer from "multer";
+import { hashPassword, verifyPassword, startSession, endSession, requireLogin, requireAdmin } from "./auth";
 
 /** Fire-and-forget Notion sync — never blocks the response */
 function notionSync(label: string, fn: () => any) {
@@ -50,6 +51,98 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  // ── Auth-Routen (öffentlich) ──
+  app.post("/api/auth/login", async (req, res) => {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: "E-Mail und Passwort erforderlich" });
+    }
+    const member = await storage.getMemberByEmail(String(email));
+    if (!member || !member.passwordHash) {
+      return res.status(401).json({ error: "E-Mail oder Passwort falsch" });
+    }
+    const ok = await verifyPassword(String(password), member.passwordHash);
+    if (!ok) {
+      return res.status(401).json({ error: "E-Mail oder Passwort falsch" });
+    }
+    startSession(res, member.id);
+    res.json({ id: member.id, name: member.name, email: member.email, isAdmin: !!member.isAdmin });
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    endSession(req, res);
+    res.json({ success: true });
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    if (!req.currentMember) return res.status(401).json({ error: "Nicht angemeldet" });
+    const m = req.currentMember;
+    res.json({ id: m.id, name: m.name, email: m.email, isAdmin: !!m.isAdmin });
+  });
+
+  // Eigenes Passwort ändern (jeder eingeloggte Nutzer)
+  app.post("/api/auth/change-password", requireLogin, async (req, res) => {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: "Beide Passwörter erforderlich" });
+    if (String(newPassword).length < 8) return res.status(400).json({ error: "Neues Passwort muss mindestens 8 Zeichen haben" });
+    const me = req.currentMember!;
+    if (!me.passwordHash) return res.status(400).json({ error: "Konto hat noch kein Passwort" });
+    const ok = await verifyPassword(String(currentPassword), me.passwordHash);
+    if (!ok) return res.status(401).json({ error: "Aktuelles Passwort falsch" });
+    const newHash = await hashPassword(String(newPassword));
+    await storage.updateMember(me.id, { passwordHash: newHash });
+    res.json({ success: true });
+  });
+
+  // Admin: Passwort eines Mitglieds setzen / Admin-Status ändern
+  app.post("/api/members/:id/set-password", requireAdmin, async (req, res) => {
+    const { password } = req.body || {};
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({ error: "Passwort muss mindestens 8 Zeichen haben" });
+    }
+    const member = await storage.getMember(req.params.id);
+    if (!member) return res.status(404).json({ error: "Mitglied nicht gefunden" });
+    const hash = await hashPassword(String(password));
+    await storage.updateMember(member.id, { passwordHash: hash });
+    res.json({ success: true });
+  });
+
+  app.post("/api/members/:id/set-admin", requireAdmin, async (req, res) => {
+    const { isAdmin } = req.body || {};
+    const member = await storage.getMember(req.params.id);
+    if (!member) return res.status(404).json({ error: "Mitglied nicht gefunden" });
+    // Sicherheitsregel: Selbst-Demote nur erlaubt, wenn ein anderer Admin existiert
+    if (req.currentMember!.id === member.id && !isAdmin) {
+      const all = await storage.getMembers();
+      const otherAdmins = all.filter((m) => m.isAdmin && m.id !== member.id).length;
+      if (otherAdmins === 0) {
+        return res.status(400).json({ error: "Letzten Admin kann man sich nicht selbst entziehen" });
+      }
+    }
+    await storage.updateMember(member.id, { isAdmin: !!isAdmin });
+    res.json({ success: true });
+  });
+
+  // ── Globaler Schutz: alle weiteren /api/-Routen erfordern Login,
+  // Schreib-/Löschoperationen erfordern Admin ──
+  // Whitelist: Routen, auf die auch normale Mitglieder schreiben dürfen.
+  // (Aktuell nur Abstimmen — alles andere ist Admin-only.)
+  const memberWriteWhitelist: Array<{ method: string; pattern: RegExp }> = [
+    { method: "POST", pattern: /^\/api\/votes\/?$/ },
+  ];
+  app.use("/api", (req, res, next) => {
+    if (!req.currentMember) return res.status(401).json({ error: "Nicht angemeldet" });
+    if (req.method === "GET") return next();
+    if (req.currentMember.isAdmin) return next();
+    const path = req.path; // z. B. "/votes" (relativ zum app.use-Mount)
+    const fullPath = "/api" + (path.startsWith("/") ? path : "/" + path);
+    const allowed = memberWriteWhitelist.some(
+      (w) => w.method === req.method && w.pattern.test(fullPath)
+    );
+    if (allowed) return next();
+    return res.status(403).json({ error: "Keine Admin-Rechte. Nur Admins dürfen ändern." });
+  });
 
   // ── Members ──
   app.get("/api/members", async (_req, res) => {
@@ -508,6 +601,13 @@ export async function registerRoutes(
       console.error("view failed", err);
       res.status(500).json({ error: err?.message || "Anzeige fehlgeschlagen" });
     }
+  });
+
+  // Löschen eines Dokuments (Admin)
+  app.delete("/api/documents/:id", async (req, res) => {
+    const ok = await storage.deleteDocument(req.params.id);
+    if (!ok) return res.status(404).json({ error: "Dokument nicht gefunden" });
+    res.json({ success: true });
   });
 
   // ── Polls ──

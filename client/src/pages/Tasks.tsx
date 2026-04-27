@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { CheckSquare, Plus, ArrowRight, Calendar, User, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import type { Task, Member } from "@shared/schema";
 
 const columns = ["Offen", "In Bearbeitung", "Erledigt"];
@@ -47,6 +48,7 @@ export default function Tasks() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
 
   const { data: tasks, isLoading } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: members } = useQuery<Member[]>({ queryKey: ["/api/members"] });
@@ -132,11 +134,13 @@ export default function Tasks() {
           <h1 className="text-xl font-semibold flex items-center gap-2" data-testid="text-tasks-title">
             <CheckSquare className="w-5 h-5" /> Aufgaben
           </h1>
-          <p className="text-sm text-muted-foreground">Klick auf eine Karte zum Bearbeiten</p>
+          <p className="text-sm text-muted-foreground">{isAdmin ? "Klick auf eine Karte zum Bearbeiten" : "Aufgabenübersicht (nur Admins können bearbeiten)"}</p>
         </div>
-        <Button size="sm" data-testid="button-new-task" onClick={openNew}>
-          <Plus className="w-4 h-4 mr-1" /> Neue Aufgabe
-        </Button>
+        {isAdmin && (
+          <Button size="sm" data-testid="button-new-task" onClick={openNew}>
+            <Plus className="w-4 h-4 mr-1" /> Neue Aufgabe
+          </Button>
+        )}
       </div>
 
       {/* Kanban Board */}
@@ -161,8 +165,8 @@ export default function Tasks() {
                     <Card
                       key={task.id}
                       data-testid={`task-card-${task.id}`}
-                      className="cursor-pointer hover:bg-accent/40 transition-colors"
-                      onClick={() => openEdit(task)}
+                      className={`transition-colors ${isAdmin ? "cursor-pointer hover:bg-accent/40" : ""}`}
+                      onClick={() => { if (isAdmin) openEdit(task); }}
                     >
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
@@ -188,7 +192,7 @@ export default function Tasks() {
                               </span>
                             )}
                           </div>
-                          {getNextStatus(task.status) && (
+                          {isAdmin && getNextStatus(task.status) && (
                             <Button
                               variant="ghost"
                               size="icon"

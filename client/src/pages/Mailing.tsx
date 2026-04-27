@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -92,6 +93,21 @@ Vorstand AllenGeRechtes Wohnen eG`,
 ];
 
 export default function Mailing() {
+  const { isAdmin } = useAuth();
+  if (!isAdmin) {
+    return (
+      <div className="p-4 md:p-6 max-w-2xl">
+        <div className="rounded-lg border bg-muted/30 p-6 text-center space-y-2">
+          <p className="text-sm font-medium">E-Mail-Verteiler nur für Admins.</p>
+          <p className="text-xs text-muted-foreground">Wende dich an einen Admin, wenn eine Nachricht an alle Mitglieder verschickt werden soll.</p>
+        </div>
+      </div>
+    );
+  }
+  return <MailingInner />;
+}
+
+function MailingInner() {
   const { toast } = useToast();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [subject, setSubject] = useState("");

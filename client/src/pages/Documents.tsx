@@ -8,9 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FolderOpen, FileText, Upload, Search, Folder, ArrowLeft, ExternalLink, Download, FolderPlus, Eye } from "lucide-react";
+import { FolderOpen, FileText, Upload, Search, Folder, ArrowLeft, ExternalLink, Download, FolderPlus, Eye, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import type { Folder as FolderType, Document as DocType } from "@shared/schema";
 
 const fileIcon: Record<string, string> = {
@@ -68,6 +70,7 @@ export default function Documents() {
   const [newFolderName, setNewFolderName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
 
   const { data: folders, isLoading: loadingFolders } = useQuery<FolderType[]>({ queryKey: ["/api/folders"] });
   const { data: allDocs, isLoading: loadingDocs } = useQuery<DocType[]>({ queryKey: ["/api/documents"] });
@@ -156,6 +159,22 @@ export default function Documents() {
     },
   });
 
+  const [docToDelete, setDocToDelete] = useState<DocType | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/documents/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      setDocToDelete(null);
+      toast({ title: "Gelöscht", description: "Dokument wurde entfernt." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Fehler", description: err?.message || "Löschen fehlgeschlagen", variant: "destructive" });
+    },
+  });
+
   const handleDownload = (doc: DocType) => {
     // Direkt als Browser-Download triggern
     const a = window.document.createElement("a");
@@ -190,6 +209,7 @@ export default function Documents() {
           </h1>
           <p className="text-sm text-muted-foreground">Dateien und Ordner der Genossenschaft</p>
         </div>
+        {isAdmin && (
         <div className="flex items-center gap-2">
         <Dialog open={newFolderOpen} onOpenChange={(open) => {
           setNewFolderOpen(open);
@@ -312,6 +332,7 @@ export default function Documents() {
           </DialogContent>
         </Dialog>
         </div>
+        )}
       </div>
 
       {/* Search */}
@@ -382,6 +403,18 @@ export default function Documents() {
                           <Download className="w-4 h-4" />
                         </Button>
                       )}
+                      {isAdmin && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={(e) => { e.stopPropagation(); setDocToDelete(doc); }}
+                          data-testid={`button-delete-${doc.id}`}
+                          title="Löschen"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 );
@@ -415,6 +448,29 @@ export default function Documents() {
           )}
         </div>
       )}
+
+      {/* Lösch-Bestätigung */}
+      <AlertDialog open={!!docToDelete} onOpenChange={(o) => { if (!o) setDocToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Dokument löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              „{docToDelete?.name}“ wird endgültig entfernt. Das lässt sich nicht rückgängig machen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={() => docToDelete && deleteMutation.mutate(docToDelete.id)}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Löscht…" : "Löschen"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Markdown-Vorschau-Dialog (nur für Dokumente mit content) */}
       <Dialog open={!!selectedDoc} onOpenChange={(o) => !o && setSelectedDoc(null)}>

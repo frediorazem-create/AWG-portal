@@ -29,6 +29,7 @@ export interface IStorage {
   // Members
   getMembers(): Promise<Member[]>;
   getMember(id: string): Promise<Member | undefined>;
+  getMemberByEmail(email: string): Promise<Member | undefined>;
   createMember(member: InsertMember): Promise<Member>;
   updateMember(id: string, data: Partial<Member>): Promise<Member | undefined>;
   deleteMember(id: string): Promise<boolean>;
@@ -69,6 +70,7 @@ export interface IStorage {
   getDocument(id: string): Promise<Document | undefined>;
   getDocumentsByFolder(folderId: string): Promise<Document[]>;
   createDocument(document: InsertDocument): Promise<Document>;
+  deleteDocument(id: string): Promise<boolean>;
 
   // Polls
   getPolls(): Promise<Poll[]>;
@@ -155,23 +157,35 @@ export class SqliteStorage implements IStorage {
 
   // Migrate older DB schemas: add columns that were introduced later.
   private migrateSchema() {
-    const cols = this.db.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
-    const has = (n: string) => cols.some((c) => c.name === n);
-    if (!has("content")) {
+    const docCols = this.db.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
+    const docHas = (n: string) => docCols.some((c) => c.name === n);
+    if (!docHas("content")) {
       console.log("[storage] migrate: ALTER documents ADD COLUMN content");
       this.db.exec("ALTER TABLE documents ADD COLUMN content TEXT");
     }
-    if (!has("notionUrl")) {
+    if (!docHas("notionUrl")) {
       console.log("[storage] migrate: ALTER documents ADD COLUMN notionUrl");
       this.db.exec("ALTER TABLE documents ADD COLUMN notionUrl TEXT");
     }
-    if (!has("mimeType")) {
+    if (!docHas("mimeType")) {
       console.log("[storage] migrate: ALTER documents ADD COLUMN mimeType");
       this.db.exec("ALTER TABLE documents ADD COLUMN mimeType TEXT");
     }
-    if (!has("fileData")) {
+    if (!docHas("fileData")) {
       console.log("[storage] migrate: ALTER documents ADD COLUMN fileData");
       this.db.exec("ALTER TABLE documents ADD COLUMN fileData TEXT");
+    }
+
+    // Members: passwordHash + isAdmin
+    const memCols = this.db.prepare("PRAGMA table_info(members)").all() as Array<{ name: string }>;
+    const memHas = (n: string) => memCols.some((c) => c.name === n);
+    if (!memHas("passwordHash")) {
+      console.log("[storage] migrate: ALTER members ADD COLUMN passwordHash");
+      this.db.exec("ALTER TABLE members ADD COLUMN passwordHash TEXT");
+    }
+    if (!memHas("isAdmin")) {
+      console.log("[storage] migrate: ALTER members ADD COLUMN isAdmin");
+      this.db.exec("ALTER TABLE members ADD COLUMN isAdmin INTEGER DEFAULT 0");
     }
   }
 
@@ -192,7 +206,9 @@ export class SqliteStorage implements IStorage {
         profileImage TEXT,
         address TEXT,
         website TEXT,
-        joinedAt TEXT
+        joinedAt TEXT,
+        passwordHash TEXT,
+        isAdmin INTEGER DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS channels (
         id TEXT PRIMARY KEY,
@@ -553,11 +569,21 @@ export class SqliteStorage implements IStorage {
   }
 
   // ── Members ──
+  private toMember(row: any): Member {
+    if (!row) return row;
+    return { ...row, isAdmin: !!row.isAdmin } as Member;
+  }
   async getMembers(): Promise<Member[]> {
-    return this.db.prepare("SELECT * FROM members ORDER BY joinedAt ASC").all() as Member[];
+    const rows = this.db.prepare("SELECT * FROM members ORDER BY joinedAt ASC").all() as any[];
+    return rows.map((r) => this.toMember(r));
   }
   async getMember(id: string): Promise<Member | undefined> {
-    return this.db.prepare("SELECT * FROM members WHERE id = ?").get(id) as Member | undefined;
+    const row = this.db.prepare("SELECT * FROM members WHERE id = ?").get(id) as any;
+    return row ? this.toMember(row) : undefined;
+  }
+  async getMemberByEmail(email: string): Promise<Member | undefined> {
+    const row = this.db.prepare("SELECT * FROM members WHERE LOWER(email) = LOWER(?)").get(email) as any;
+    return row ? this.toMember(row) : undefined;
   }
   async createMember(m: InsertMember): Promise<Member> {
     const id = randomUUID();
@@ -572,18 +598,19 @@ export class SqliteStorage implements IStorage {
       address: (m as any).address ?? null,
       website: (m as any).website ?? null,
       joinedAt: m.joinedAt ?? null,
+      passwordHash: (m as any).passwordHash ?? null,
+      isAdmin: !!(m as any).isAdmin,
     };
     this.db.prepare(`
-      INSERT INTO members (id, name, email, phone, role, avatar, profileImage, address, website, joinedAt)
-      VALUES (@id, @name, @email, @phone, @role, @avatar, @profileImage, @address, @website, @joinedAt)
-    `).run(member);
+      INSERT INTO members (id, name, email, phone, role, avatar, profileImage, address, website, joinedAt, passwordHash, isAdmin)
+      VALUES (@id, @name, @email, @phone, @role, @avatar, @profileImage, @address, @website, @joinedAt, @passwordHash, @isAdminInt)
+    `).run({ ...member, isAdminInt: member.isAdmin ? 1 : 0 });
     return member;
   }
   async updateMember(id: string, data: Partial<Member>): Promise<Member | undefined> {
     const existing = await this.getMember(id);
     if (!existing) return undefined;
     const updated: Member = { ...existing, ...data, id };
-    // Recalculate avatar from name if name changed and no explicit avatar
     if (data.name && !data.avatar) {
       updated.avatar = data.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
     }
@@ -591,9 +618,10 @@ export class SqliteStorage implements IStorage {
       UPDATE members SET
         name = @name, email = @email, phone = @phone, role = @role,
         avatar = @avatar, profileImage = @profileImage, address = @address,
-        website = @website, joinedAt = @joinedAt
+        website = @website, joinedAt = @joinedAt,
+        passwordHash = @passwordHash, isAdmin = @isAdminInt
       WHERE id = @id
-    `).run(updated);
+    `).run({ ...updated, isAdminInt: updated.isAdmin ? 1 : 0 });
     return updated;
   }
   async deleteMember(id: string): Promise<boolean> {
@@ -769,6 +797,10 @@ export class SqliteStorage implements IStorage {
       VALUES (@id, @name, @type, @size, @folderId, @uploadedBy, @uploadedAt, @content, @notionUrl, @mimeType, @fileData)
     `).run(doc);
     return doc;
+  }
+  async deleteDocument(id: string): Promise<boolean> {
+    const res = this.db.prepare("DELETE FROM documents WHERE id = ?").run(id);
+    return res.changes > 0;
   }
 
   // ── Polls ──

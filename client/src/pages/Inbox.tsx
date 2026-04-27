@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -68,6 +69,21 @@ function displayFrom(f: Addr) {
 type Folder = "inbox" | "sent";
 
 export default function Inbox() {
+  const { isAdmin } = useAuth();
+  if (!isAdmin) {
+    return (
+      <div className="p-4 md:p-6 max-w-2xl">
+        <div className="rounded-lg border bg-muted/30 p-6 text-center space-y-2">
+          <p className="text-sm font-medium">Posteingang nur für Admins.</p>
+          <p className="text-xs text-muted-foreground">Hier liegen die Vereins-E-Mails. Bitte einen Admin um Zugang.</p>
+        </div>
+      </div>
+    );
+  }
+  return <InboxInner />;
+}
+
+function InboxInner() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [folder, setFolder] = useState<Folder>("inbox");

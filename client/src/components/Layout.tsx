@@ -20,10 +20,26 @@ import {
   Home,
   Bookmark,
   Settings2,
+  LogOut,
+  KeyRound,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { PerplexityAttribution } from "@/components/PerplexityAttribution";
+import { useAuth } from "@/lib/auth";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { SidebarItem } from "@shared/schema";
 
 const navItems = [
@@ -39,11 +55,78 @@ const navItems = [
   { href: "/posteingang", label: "Posteingang", icon: Inbox },
 ];
 
+function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const [oldPw, setOldPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+
+  const submit = async () => {
+    if (newPw.length < 8) {
+      toast({ title: "Zu kurz", description: "Das neue Passwort muss mindestens 8 Zeichen haben.", variant: "destructive" });
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiRequest("POST", "/api/auth/change-password", { currentPassword: oldPw, newPassword: newPw });
+      toast({ title: "Passwort geändert", description: "Ab sofort gilt das neue Passwort." });
+      setOldPw("");
+      setNewPw("");
+      onOpenChange(false);
+    } catch (err: any) {
+      const msg = String(err?.message || "");
+      const friendly = msg.includes("401") || msg.includes("403")
+        ? "Das alte Passwort stimmt nicht."
+        : "Passwort konnte nicht geändert werden.";
+      toast({ title: "Fehler", description: friendly, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Mein Passwort ändern</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-2">
+            <Label>Aktuelles Passwort</Label>
+            <Input type="password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} data-testid="input-old-password" />
+          </div>
+          <div className="space-y-2">
+            <Label>Neues Passwort</Label>
+            <Input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} data-testid="input-new-password" />
+            <p className="text-[11px] text-muted-foreground">Mindestens 8 Zeichen.</p>
+          </div>
+        </div>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+          <Button onClick={submit} disabled={busy} data-testid="button-save-password">
+            {busy ? "Speichere…" : "Speichern"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const { user, isAdmin, logout } = useAuth();
   const { data: customItems } = useQuery<SidebarItem[]>({ queryKey: ["/api/sidebar-items"] });
+
+  const initials = (user?.name || "")
+    .split(" ")
+    .map((n) => n[0])
+    .filter(Boolean)
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "?";
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -133,47 +216,81 @@ export function Layout({ children }: { children: ReactNode }) {
             </div>
           )}
 
-          {/* Verwalten-Eintrag */}
-          <div className="pt-2">
-            <Link href="/sidebar-verwalten">
-              <div
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
-                  location === "/sidebar-verwalten"
-                    ? "bg-sidebar-accent text-sidebar-primary"
-                    : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
-                }`}
-                onClick={() => setSidebarOpen(false)}
-                data-testid="nav-sidebar-verwalten"
-              >
-                <Settings2 className="w-4 h-4 shrink-0" />
-                <span>Bereiche verwalten</span>
-              </div>
-            </Link>
-          </div>
+          {/* Verwalten-Eintrag — nur Admins */}
+          {isAdmin && (
+            <div className="pt-2">
+              <Link href="/sidebar-verwalten">
+                <div
+                  className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                    location === "/sidebar-verwalten"
+                      ? "bg-sidebar-accent text-sidebar-primary"
+                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+                  }`}
+                  onClick={() => setSidebarOpen(false)}
+                  data-testid="nav-sidebar-verwalten"
+                >
+                  <Settings2 className="w-4 h-4 shrink-0" />
+                  <span>Bereiche verwalten</span>
+                </div>
+              </Link>
+            </div>
+          )}
         </nav>
 
         {/* Footer */}
         <div className="border-t border-sidebar-border px-3 py-3 space-y-2 shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Avatar className="w-7 h-7">
-                <AvatarFallback className="text-xs bg-primary/10 text-primary">FO</AvatarFallback>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Avatar className="w-7 h-7 shrink-0">
+                <AvatarFallback className="text-xs bg-primary/10 text-primary">{initials}</AvatarFallback>
               </Avatar>
-              <span className="text-xs text-sidebar-foreground font-medium">Fredi Orazem</span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs text-sidebar-foreground font-medium truncate" data-testid="text-current-user">
+                  {user?.name || "Mitglied"}
+                </span>
+                {isAdmin && (
+                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 w-fit gap-0.5" data-testid="badge-admin">
+                    <ShieldCheck className="w-2.5 h-2.5" /> Admin
+                  </Badge>
+                )}
+              </div>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-7 shrink-0"
               onClick={toggleTheme}
               data-testid="theme-toggle"
+              title={theme === "dark" ? "Helles Design" : "Dunkles Design"}
             >
               {theme === "dark" ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+            </Button>
+          </div>
+          <div className="flex gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 h-7 text-[11px] gap-1"
+              onClick={() => setPwOpen(true)}
+              data-testid="button-change-password"
+            >
+              <KeyRound className="w-3 h-3" /> Passwort
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 h-7 text-[11px] gap-1"
+              onClick={() => logout()}
+              data-testid="button-logout"
+            >
+              <LogOut className="w-3 h-3" /> Abmelden
             </Button>
           </div>
           <PerplexityAttribution />
         </div>
       </aside>
+
+      <ChangePasswordDialog open={pwOpen} onOpenChange={setPwOpen} />
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

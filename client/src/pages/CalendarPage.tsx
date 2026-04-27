@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import type { Event as CalEvent } from "@shared/schema";
 
 type EventForm = { title: string; description: string; date: string; time: string; endTime: string; location: string; category: string };
@@ -44,6 +45,7 @@ export default function CalendarPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<EventForm>(emptyForm);
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
 
   const { data: events, isLoading } = useQuery<CalEvent[]>({ queryKey: ["/api/events"] });
 
@@ -151,9 +153,11 @@ export default function CalendarPage() {
           </h1>
           <p className="text-sm text-muted-foreground">Termine und Veranstaltungen</p>
         </div>
-        <Button size="sm" data-testid="button-new-event" onClick={openNew}>
-          <Plus className="w-4 h-4 mr-1" /> Neuer Termin
-        </Button>
+        {isAdmin && (
+          <Button size="sm" data-testid="button-new-event" onClick={openNew}>
+            <Plus className="w-4 h-4 mr-1" /> Neuer Termin
+          </Button>
+        )}
         <Dialog open={open} onOpenChange={(o) => { if (!o) closeDialog(); else setOpen(true); }}>
           <DialogContent>
             <DialogHeader>
@@ -274,10 +278,11 @@ export default function CalendarPage() {
                           <button
                             key={e.id}
                             type="button"
-                            onClick={() => openEdit(e)}
-                            className={`block w-full text-left text-[9px] leading-tight px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80 ${categoryColor[e.category] || "bg-muted"}`}
+                            onClick={() => { if (isAdmin) openEdit(e); }}
+                            disabled={!isAdmin}
+                            className={`block w-full text-left text-[9px] leading-tight px-1 py-0.5 rounded truncate ${isAdmin ? "cursor-pointer hover:opacity-80" : "cursor-default"} ${categoryColor[e.category] || "bg-muted"}`}
                             data-testid={`event-pill-${e.id}`}
-                            title={`${e.title} \u2014 zum Bearbeiten klicken`}
+                            title={isAdmin ? `${e.title} \u2014 zum Bearbeiten klicken` : e.title}
                           >
                             {e.title}
                           </button>
@@ -306,10 +311,10 @@ export default function CalendarPage() {
               upcomingEvents.map((e) => (
                 <div
                   key={e.id}
-                  className="p-3 rounded-lg border space-y-1 cursor-pointer hover:bg-accent/40 transition-colors"
+                  className={`p-3 rounded-lg border space-y-1 transition-colors ${isAdmin ? "cursor-pointer hover:bg-accent/40" : ""}`}
                   data-testid={`event-card-${e.id}`}
-                  onClick={() => openEdit(e)}
-                  title="Zum Bearbeiten klicken"
+                  onClick={() => { if (isAdmin) openEdit(e); }}
+                  title={isAdmin ? "Zum Bearbeiten klicken" : undefined}
                 >
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className={`text-[10px] ${categoryColor[e.category] || ""}`}>{e.category}</Badge>

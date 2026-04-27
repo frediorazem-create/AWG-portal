@@ -29,6 +29,8 @@ export const members = pgTable("members", {
   address: text("address"), // street, city, zip
   website: text("website"), // personal or company website URL
   joinedAt: text("joined_at"),
+  passwordHash: text("password_hash"), // bcrypt-Hash des Passworts (null = kein Login möglich)
+  isAdmin: boolean("is_admin").default(false),
 });
 
 export const insertMemberSchema = createInsertSchema(members).omit({ id: true });
