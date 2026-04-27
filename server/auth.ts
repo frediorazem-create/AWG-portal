@@ -136,9 +136,23 @@ export async function ensureAdminBootstrap(): Promise<void> {
     console.log(`[auth] Admin-Flag für ${adminEmail} gesetzt`);
   }
 
-  // Wenn noch kein Passwort gesetzt: Start-Passwort generieren und in Logs ausgeben
-  if (!admin.passwordHash) {
-    const startPw = process.env.AWG_BOOTSTRAP_PASSWORD || generateReadablePassword();
+  // Env-Variable AWG_BOOTSTRAP_PASSWORD: setzt das Admin-Passwort IMMER auf diesen Wert.
+  // Praktisch für Recovery, wenn man das gesetzte Passwort nicht mehr weiß.
+  // Nach erfolgreichem Setzen die Variable in Render bitte wieder entfernen.
+  const envPw = process.env.AWG_BOOTSTRAP_PASSWORD;
+  if (envPw && envPw.length >= 8) {
+    const hash = await hashPassword(envPw);
+    await storage.updateMember(admin.id, { passwordHash: hash });
+    console.log(
+      `\n========================================\n` +
+        `[auth] Admin-Passwort wurde aus AWG_BOOTSTRAP_PASSWORD übernommen.\n` +
+        `       Konto: ${adminEmail}\n` +
+        `       Variable bitte in Render wieder entfernen.\n` +
+        `========================================\n`,
+    );
+  } else if (!admin.passwordHash) {
+    // Erstinstallation ohne Env-Variable: zufälliges Start-Passwort generieren
+    const startPw = generateReadablePassword();
     const hash = await hashPassword(startPw);
     await storage.updateMember(admin.id, { passwordHash: hash });
     console.log(
