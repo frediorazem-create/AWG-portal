@@ -491,6 +491,25 @@ export async function registerRoutes(
     }
   });
 
+  // Inline-Ansicht (öffnet PDFs/Bilder direkt im Browser)
+  app.get("/api/documents/:id/view", async (req, res) => {
+    try {
+      const doc = await storage.getDocument(req.params.id);
+      if (!doc) return res.status(404).json({ error: "Dokument nicht gefunden" });
+      const data = (doc as any).fileData as string | null | undefined;
+      if (!data) return res.status(404).json({ error: "Keine Datei zu diesem Dokument hinterlegt" });
+      const buf = Buffer.from(data, "base64");
+      const mime = (doc as any).mimeType || "application/octet-stream";
+      res.setHeader("Content-Type", mime);
+      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.name)}"`);
+      res.setHeader("Content-Length", String(buf.length));
+      res.end(buf);
+    } catch (err: any) {
+      console.error("view failed", err);
+      res.status(500).json({ error: err?.message || "Anzeige fehlgeschlagen" });
+    }
+  });
+
   // ── Polls ──
   app.get("/api/polls", async (_req, res) => {
     const polls = await storage.getPolls();

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FolderOpen, FileText, Upload, Search, Folder, ArrowLeft, ExternalLink, Download, FolderPlus } from "lucide-react";
+import { FolderOpen, FileText, Upload, Search, Folder, ArrowLeft, ExternalLink, Download, FolderPlus, Eye } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Folder as FolderType, Document as DocType } from "@shared/schema";
@@ -164,6 +164,21 @@ export default function Documents() {
     window.document.body.appendChild(a);
     a.click();
     a.remove();
+  };
+
+  // Datei-Typen, die der Browser direkt anzeigen kann
+  const isInlineViewable = (mime?: string | null) => {
+    if (!mime) return false;
+    return (
+      mime === "application/pdf" ||
+      mime.startsWith("image/") ||
+      mime.startsWith("text/") ||
+      mime === "application/json"
+    );
+  };
+
+  const handleOpen = (doc: DocType) => {
+    window.open(`/api/documents/${doc.id}/view`, "_blank", "noopener");
   };
 
   return (
@@ -345,6 +360,17 @@ export default function Documents() {
                         </p>
                       </div>
                       <Badge variant="outline" className="text-[10px] uppercase shrink-0">{doc.type}</Badge>
+                      {hasFile && isInlineViewable((doc as any).mimeType) && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={(e) => { e.stopPropagation(); handleOpen(doc); }}
+                          data-testid={`button-open-${doc.id}`}
+                          title="Öffnen"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      )}
                       {hasFile && (
                         <Button
                           size="icon"
