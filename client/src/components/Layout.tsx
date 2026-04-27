@@ -67,7 +67,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-semibold text-sidebar-foreground leading-tight">AWG Portal</span>
-            <span className="text-[10px] text-muted-foreground leading-tight">Allengerechtes Wohnen e.G.</span>
+            <span className="text-[10px] text-muted-foreground leading-tight">Allengerechtes Wohnen</span>
           </div>
           <Button
             variant="ghost"
