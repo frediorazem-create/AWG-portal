@@ -23,6 +23,8 @@ import {
   LogOut,
   KeyRound,
   ShieldCheck,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -54,6 +56,30 @@ const navItems = [
   { href: "/mailing", label: "E-Mail-Verteiler", icon: Mail },
   { href: "/posteingang", label: "Posteingang", icon: Inbox },
 ];
+
+function PwInput({ value, onChange, testId }: { value: string; onChange: (v: string) => void; testId: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <Input
+        type={show ? "text" : "password"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="pr-10"
+        data-testid={testId}
+      />
+      <button
+        type="button"
+        onClick={() => setShow((v) => !v)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+        aria-label={show ? "Passwort verbergen" : "Passwort anzeigen"}
+        tabIndex={-1}
+      >
+        {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
+    </div>
+  );
+}
 
 function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const [oldPw, setOldPw] = useState("");
@@ -93,11 +119,11 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         <div className="space-y-3 py-2">
           <div className="space-y-2">
             <Label>Aktuelles Passwort</Label>
-            <Input type="password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} data-testid="input-old-password" />
+            <PwInput value={oldPw} onChange={setOldPw} testId="input-old-password" />
           </div>
           <div className="space-y-2">
             <Label>Neues Passwort</Label>
-            <Input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} data-testid="input-new-password" />
+            <PwInput value={newPw} onChange={setNewPw} testId="input-new-password" />
             <p className="text-[11px] text-muted-foreground">Mindestens 8 Zeichen.</p>
           </div>
         </div>
