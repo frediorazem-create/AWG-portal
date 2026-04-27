@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { CheckSquare, Plus, ArrowRight, Calendar, User } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Task } from "@shared/schema";
+import type { Task, Member } from "@shared/schema";
 
 const columns = ["Offen", "In Bearbeitung", "Erledigt"];
 
@@ -23,23 +23,28 @@ const priorityColor: Record<string, string> = {
 
 export default function Tasks() {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", priority: "Mittel", assigneeName: "", dueDate: "" });
+  const [form, setForm] = useState({ title: "", description: "", priority: "Mittel", assigneeId: "", assigneeName: "", dueDate: "" });
 
   const { data: tasks, isLoading } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  const { data: members } = useQuery<Member[]>({ queryKey: ["/api/members"] });
 
   const createMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/tasks", {
-        ...form,
+        title: form.title,
+        description: form.description || null,
+        priority: form.priority,
+        dueDate: form.dueDate || null,
+        assigneeId: form.assigneeId || null,
+        assigneeName: form.assigneeName || null,
         status: "Offen",
-        assigneeId: null,
         createdAt: new Date().toISOString(),
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       setOpen(false);
-      setForm({ title: "", description: "", priority: "Mittel", assigneeName: "", dueDate: "" });
+      setForm({ title: "", description: "", priority: "Mittel", assigneeId: "", assigneeName: "", dueDate: "" });
     },
   });
 
@@ -104,7 +109,27 @@ export default function Tasks() {
               </div>
               <div>
                 <Label>Zugewiesen an</Label>
-                <Input value={form.assigneeName} onChange={(e) => setForm({ ...form, assigneeName: e.target.value })} placeholder="Name des Mitglieds" data-testid="input-task-assignee" />
+                <Select
+                  value={form.assigneeId || "none"}
+                  onValueChange={(v) => {
+                    if (v === "none") {
+                      setForm({ ...form, assigneeId: "", assigneeName: "" });
+                    } else {
+                      const m = members?.find((x) => x.id === v);
+                      setForm({ ...form, assigneeId: v, assigneeName: m?.name || "" });
+                    }
+                  }}
+                >
+                  <SelectTrigger data-testid="select-task-assignee">
+                    <SelectValue placeholder="Mitglied wählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Niemand</SelectItem>
+                    {members?.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <Button onClick={() => createMutation.mutate()} disabled={!form.title || createMutation.isPending} className="w-full" data-testid="button-submit-task">
                 Aufgabe erstellen
