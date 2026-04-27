@@ -61,8 +61,9 @@ export default function Documents() {
   const [selectedDoc, setSelectedDoc] = useState<DocType | null>(null);
   const [search, setSearch] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadFolderId, setUploadFolderId] = useState<string>("");
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number; current?: string } | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -104,31 +105,53 @@ export default function Documents() {
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
-      if (!uploadFile) throw new Error("Bitte zuerst eine Datei auswählen");
-      const folderId = uploadFolderId || selectedFolder || folders?.[0]?.id;
-      if (!folderId) throw new Error("Bitte einen Ordner wählen");
+      if (uploadFiles.length === 0) throw new Error("Bitte zuerst Dateien ausw\u00e4hlen");
+      const folderId = uploadFolderId || selectedFolder;
+      if (!folderId) throw new Error("Bitte einen Ordner w\u00e4hlen");
 
-      const fd = new FormData();
-      fd.append("file", uploadFile);
-      fd.append("folderId", folderId);
-      fd.append("uploadedBy", "Fredi Orazem");
+      const failed: string[] = [];
+      setUploadProgress({ done: 0, total: uploadFiles.length });
 
-      const res = await fetch("/api/documents/upload", { method: "POST", body: fd });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `Upload fehlgeschlagen (${res.status})`);
+      // Sequentiell hochladen — vermeidet Memory-Spikes auf Render Starter (512 MB)
+      for (let i = 0; i < uploadFiles.length; i++) {
+        const file = uploadFiles[i];
+        setUploadProgress({ done: i, total: uploadFiles.length, current: file.name });
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("folderId", folderId);
+        fd.append("uploadedBy", "Fredi Orazem");
+        try {
+          const res = await fetch("/api/documents/upload", { method: "POST", body: fd });
+          if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            failed.push(`${file.name}: ${text || res.status}`);
+          }
+        } catch (err: any) {
+          failed.push(`${file.name}: ${err?.message || "Netzwerkfehler"}`);
+        }
       }
-      return res.json();
+      return { total: uploadFiles.length, failed };
     },
-    onSuccess: () => {
+    onSuccess: ({ total, failed }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
-      setUploadOpen(false);
-      setUploadFile(null);
-      setUploadFolderId("");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      toast({ title: "Hochgeladen", description: "Die Datei wurde gespeichert." });
+      setUploadProgress(null);
+      if (failed.length === 0) {
+        toast({ title: "Hochgeladen", description: total === 1 ? "Die Datei wurde gespeichert." : `${total} Dateien gespeichert.` });
+        setUploadOpen(false);
+        setUploadFiles([]);
+        setUploadFolderId("");
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      } else {
+        const ok = total - failed.length;
+        toast({
+          title: `${ok}/${total} hochgeladen`,
+          description: `Fehlgeschlagen: ${failed.slice(0, 3).join("; ")}${failed.length > 3 ? " \u2026" : ""}`,
+          variant: "destructive",
+        });
+      }
     },
     onError: (err: any) => {
+      setUploadProgress(null);
       toast({ title: "Upload fehlgeschlagen", description: err?.message || "Unbekannter Fehler", variant: "destructive" });
     },
   });
@@ -195,10 +218,12 @@ export default function Documents() {
           </DialogContent>
         </Dialog>
         <Dialog open={uploadOpen} onOpenChange={(open) => {
+          if (uploadMutation.isPending) return; // während Upload nicht schließen
           setUploadOpen(open);
           if (!open) {
-            setUploadFile(null);
+            setUploadFiles([]);
             setUploadFolderId("");
+            setUploadProgress(null);
             if (fileInputRef.current) fileInputRef.current.value = "";
           }
         }}>
@@ -209,46 +234,64 @@ export default function Documents() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Datei hochladen</DialogTitle>
+              <DialogTitle>Dateien hochladen</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="file-input">Datei vom Computer</Label>
+                <Label htmlFor="file-input">Dateien vom Computer (mehrere auswählbar)</Label>
                 <Input
                   id="file-input"
                   ref={fileInputRef}
                   type="file"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+                  multiple
+                  onChange={(e) => setUploadFiles(Array.from(e.target.files ?? []))}
                   data-testid="input-file"
                 />
-                {uploadFile && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {uploadFile.name} · {formatSize(uploadFile.size)}
-                  </p>
+                {uploadFiles.length > 0 && (
+                  <div className="text-xs text-muted-foreground mt-2 space-y-0.5 max-h-32 overflow-y-auto">
+                    <p className="font-medium">{uploadFiles.length} Datei{uploadFiles.length !== 1 ? "en" : ""} ausgewählt</p>
+                    {uploadFiles.map((f, i) => (
+                      <p key={i} className="truncate">• {f.name} · {formatSize(f.size)}</p>
+                    ))}
+                  </div>
                 )}
                 <p className="text-xs text-muted-foreground mt-1">Maximal 15&nbsp;MB pro Datei.</p>
               </div>
               <div>
                 <Label>Ordner</Label>
                 <Select
-                  value={uploadFolderId || selectedFolder || ""}
+                  value={uploadFolderId || selectedFolder || undefined}
                   onValueChange={(v) => setUploadFolderId(v)}
                 >
                   <SelectTrigger data-testid="select-doc-folder"><SelectValue placeholder="Ordner wählen" /></SelectTrigger>
                   <SelectContent>
-                    {folders?.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
-                    ))}
+                    {(folders ?? []).length === 0 ? (
+                      <div className="px-2 py-2 text-xs text-muted-foreground">Noch kein Ordner. Bitte zuerst einen anlegen.</div>
+                    ) : (
+                      folders!.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
+              {uploadProgress && (
+                <div className="text-xs text-muted-foreground">
+                  Lädt {uploadProgress.done + 1}/{uploadProgress.total} hoch…
+                  {uploadProgress.current && <span className="block truncate">{uploadProgress.current}</span>}
+                </div>
+              )}
               <Button
                 onClick={() => uploadMutation.mutate()}
-                disabled={!uploadFile || uploadMutation.isPending}
+                disabled={uploadFiles.length === 0 || uploadMutation.isPending || (!uploadFolderId && !selectedFolder)}
                 className="w-full"
                 data-testid="button-submit-upload"
               >
-                {uploadMutation.isPending ? "Lädt hoch…" : "Hochladen"}
+                {uploadMutation.isPending
+                  ? `Lädt hoch… (${(uploadProgress?.done ?? 0)}/${uploadProgress?.total ?? uploadFiles.length})`
+                  : uploadFiles.length > 1
+                    ? `${uploadFiles.length} Dateien hochladen`
+                    : "Hochladen"}
               </Button>
             </div>
           </DialogContent>
