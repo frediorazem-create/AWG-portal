@@ -24,13 +24,18 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
+  Trash2,
 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import type { Poll, PollOption } from "@shared/schema";
 
 /* ── WhatsApp-style Poll Card ── */
 function PollCard({ poll }: { poll: Poll }) {
+  const { isAdmin } = useAuth();
+  const { toast } = useToast();
   const { data: options, isLoading } = useQuery<PollOption[]>({
     queryKey: ["/api/polls", poll.id, "options"],
     queryFn: async () => {
@@ -41,6 +46,21 @@ function PollCard({ poll }: { poll: Poll }) {
 
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showDescription, setShowDescription] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/polls/${poll.id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/polls"] });
+      setConfirmDelete(false);
+      toast({ title: "Gelöscht", description: "Die Abstimmung wurde entfernt." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Fehler", description: err?.message || "Löschen fehlgeschlagen", variant: "destructive" });
+    },
+  });
 
   const voteMutation = useMutation({
     mutationFn: async (optionId: string) => {
@@ -89,22 +109,58 @@ function PollCard({ poll }: { poll: Poll }) {
             </div>
             <h3 className="text-sm font-semibold truncate">{poll.title}</h3>
           </div>
-          <Badge
-            variant={isActive ? "default" : "secondary"}
-            className="text-[10px] shrink-0"
-          >
-            {isActive ? (
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" /> Aktiv
-              </span>
-            ) : (
-              <span className="flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> Beendet
-              </span>
+          <div className="flex items-center gap-1 shrink-0">
+            <Badge
+              variant={isActive ? "default" : "secondary"}
+              className="text-[10px]"
+            >
+              {isActive ? (
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Aktiv
+                </span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Beendet
+                </span>
+              )}
+            </Badge>
+            {isAdmin && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                onClick={() => setConfirmDelete(true)}
+                data-testid={`button-delete-poll-${poll.id}`}
+                title="Abstimmung löschen"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
             )}
-          </Badge>
+          </div>
         </div>
       </div>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Abstimmung löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              „{poll.title}“ wird mitsamt allen Optionen und Stimmen endgültig entfernt. Das lässt sich nicht rückgängig machen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+              data-testid={`button-confirm-delete-poll-${poll.id}`}
+            >
+              {deleteMutation.isPending ? "Löscht…" : "Löschen"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <CardContent className="p-0">
         {/* Description toggle */}
