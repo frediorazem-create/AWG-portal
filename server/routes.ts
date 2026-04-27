@@ -588,5 +588,34 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  // ── Sidebar-Items (eigene Bereiche) ──
+  app.get("/api/sidebar-items", async (_req, res) => {
+    const items = await storage.getSidebarItems();
+    res.json(items);
+  });
+  app.get("/api/sidebar-items/:id", async (req, res) => {
+    const item = await storage.getSidebarItem(req.params.id);
+    if (!item) return res.status(404).json({ error: "Bereich nicht gefunden" });
+    res.json(item);
+  });
+  app.post("/api/sidebar-items", async (req, res) => {
+    try {
+      const item = await storage.createSidebarItem(req.body);
+      res.json(item);
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message || "Anlegen fehlgeschlagen" });
+    }
+  });
+  app.patch("/api/sidebar-items/:id", async (req, res) => {
+    const updated = await storage.updateSidebarItem(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: "Bereich nicht gefunden" });
+    res.json(updated);
+  });
+  app.delete("/api/sidebar-items/:id", async (req, res) => {
+    const deleted = await storage.deleteSidebarItem(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Bereich nicht gefunden" });
+    res.json({ success: true });
+  });
+
   return httpServer;
 }

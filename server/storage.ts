@@ -12,6 +12,7 @@ import {
   type PollOption, type InsertPollOption,
   type Vote, type InsertVote,
   type MeetingRoom, type InsertMeetingRoom,
+  type SidebarItem, type InsertSidebarItem,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import Database from "better-sqlite3";
@@ -83,6 +84,13 @@ export interface IStorage {
   getMeetingRooms(): Promise<MeetingRoom[]>;
   createMeetingRoom(room: InsertMeetingRoom): Promise<MeetingRoom>;
   deleteMeetingRoom(id: string): Promise<boolean>;
+
+  // Sidebar-Items
+  getSidebarItems(): Promise<SidebarItem[]>;
+  getSidebarItem(id: string): Promise<SidebarItem | undefined>;
+  createSidebarItem(item: InsertSidebarItem): Promise<SidebarItem>;
+  updateSidebarItem(id: string, data: Partial<SidebarItem>): Promise<SidebarItem | undefined>;
+  deleteSidebarItem(id: string): Promise<boolean>;
 }
 
 // ──────────────────────────────────────────
@@ -280,6 +288,17 @@ export class SqliteStorage implements IStorage {
         isActive INTEGER DEFAULT 0,
         participants INTEGER DEFAULT 0,
         createdBy TEXT NOT NULL
+      );
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS sidebarItems (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        description TEXT,
+        content TEXT,
+        url TEXT,
+        sortOrder INTEGER DEFAULT 0
       );
     `);
   }
@@ -810,6 +829,42 @@ export class SqliteStorage implements IStorage {
   }
   async deleteMeetingRoom(id: string): Promise<boolean> {
     return this.db.prepare("DELETE FROM meetingRooms WHERE id = ?").run(id).changes > 0;
+  }
+
+  // ── Sidebar-Items ──
+  async getSidebarItems(): Promise<SidebarItem[]> {
+    return this.db.prepare("SELECT * FROM sidebarItems ORDER BY sortOrder ASC, label ASC").all() as SidebarItem[];
+  }
+  async getSidebarItem(id: string): Promise<SidebarItem | undefined> {
+    return this.db.prepare("SELECT * FROM sidebarItems WHERE id = ?").get(id) as SidebarItem | undefined;
+  }
+  async createSidebarItem(item: InsertSidebarItem): Promise<SidebarItem> {
+    const id = randomUUID();
+    const row: SidebarItem = {
+      id,
+      label: item.label,
+      description: item.description ?? null,
+      content: item.content ?? null,
+      url: item.url ?? null,
+      sortOrder: item.sortOrder ?? 0,
+    };
+    this.db.prepare(`
+      INSERT INTO sidebarItems (id, label, description, content, url, sortOrder)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(row.id, row.label, row.description, row.content, row.url, row.sortOrder);
+    return row;
+  }
+  async updateSidebarItem(id: string, data: Partial<SidebarItem>): Promise<SidebarItem | undefined> {
+    const existing = this.db.prepare("SELECT * FROM sidebarItems WHERE id = ?").get(id) as SidebarItem | undefined;
+    if (!existing) return undefined;
+    const merged: SidebarItem = { ...existing, ...data, id };
+    this.db.prepare(`
+      UPDATE sidebarItems SET label=?, description=?, content=?, url=?, sortOrder=? WHERE id=?
+    `).run(merged.label, merged.description, merged.content, merged.url, merged.sortOrder, id);
+    return merged;
+  }
+  async deleteSidebarItem(id: string): Promise<boolean> {
+    return this.db.prepare("DELETE FROM sidebarItems WHERE id = ?").run(id).changes > 0;
   }
 }
 

@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "./ThemeProvider";
 import {
   LayoutDashboard,
   MessageCircle,
-  Megaphone,
   Calendar,
   CheckSquare,
   FolderOpen,
@@ -18,15 +18,17 @@ import {
   Menu,
   X,
   Home,
+  Bookmark,
+  Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { PerplexityAttribution } from "@/components/PerplexityAttribution";
+import type { SidebarItem } from "@shared/schema";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/chat", label: "Chat", icon: MessageCircle },
-  { href: "/announcements", label: "Ankündigungen", icon: Megaphone },
   { href: "/calendar", label: "Kalender", icon: Calendar },
   { href: "/tasks", label: "Aufgaben", icon: CheckSquare },
   { href: "/documents", label: "Dokumente", icon: FolderOpen },
@@ -41,6 +43,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { data: customItems } = useQuery<SidebarItem[]>({ queryKey: ["/api/sidebar-items"] });
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -102,6 +105,51 @@ export function Layout({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
+
+          {/* Eigene Bereiche */}
+          {(customItems && customItems.length > 0) && (
+            <div className="pt-4">
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Meine Bereiche</p>
+              {customItems.map((item) => {
+                const href = `/bereich/${item.id}`;
+                const isActive = location === href;
+                return (
+                  <Link key={item.id} href={href}>
+                    <div
+                      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                        isActive
+                          ? "bg-sidebar-accent text-sidebar-primary"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+                      }`}
+                      onClick={() => setSidebarOpen(false)}
+                      data-testid={`nav-bereich-${item.id}`}
+                    >
+                      <Bookmark className="w-4 h-4 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Verwalten-Eintrag */}
+          <div className="pt-2">
+            <Link href="/sidebar-verwalten">
+              <div
+                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                  location === "/sidebar-verwalten"
+                    ? "bg-sidebar-accent text-sidebar-primary"
+                    : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+                }`}
+                onClick={() => setSidebarOpen(false)}
+                data-testid="nav-sidebar-verwalten"
+              >
+                <Settings2 className="w-4 h-4 shrink-0" />
+                <span>Bereiche verwalten</span>
+              </div>
+            </Link>
+          </div>
         </nav>
 
         {/* Footer */}

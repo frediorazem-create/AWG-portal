@@ -195,3 +195,17 @@ export const meetingRooms = pgTable("meeting_rooms", {
 export const insertMeetingRoomSchema = createInsertSchema(meetingRooms).omit({ id: true });
 export type InsertMeetingRoom = z.infer<typeof insertMeetingRoomSchema>;
 export type MeetingRoom = typeof meetingRooms.$inferSelect;
+
+// Eigene Sidebar-Bereiche (vom Nutzer angelegt)
+export const sidebarItems = pgTable("sidebar_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  label: text("label").notNull(),
+  description: text("description"),
+  content: text("content"),       // Markdown-Inhalt (optional)
+  url: text("url"),               // Externer Link (optional)
+  sortOrder: integer("sort_order").default(0),
+});
+
+export const insertSidebarItemSchema = createInsertSchema(sidebarItems).omit({ id: true });
+export type InsertSidebarItem = z.infer<typeof insertSidebarItemSchema>;
+export type SidebarItem = typeof sidebarItems.$inferSelect;

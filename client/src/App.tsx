@@ -17,6 +17,8 @@ import Members from "@/pages/Members";
 import VideoConference from "@/pages/VideoConference";
 import Mailing from "@/pages/Mailing";
 import Inbox from "@/pages/Inbox";
+import CustomArea from "@/pages/CustomArea";
+import SidebarManage from "@/pages/SidebarManage";
 import NotFound from "@/pages/not-found";
 
 function AppRouter() {
@@ -34,6 +36,8 @@ function AppRouter() {
         <Route path="/video" component={VideoConference} />
         <Route path="/mailing" component={Mailing} />
         <Route path="/posteingang" component={Inbox} />
+        <Route path="/sidebar-verwalten" component={SidebarManage} />
+        <Route path="/bereich/:id" component={CustomArea} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
