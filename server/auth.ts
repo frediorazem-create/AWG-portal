@@ -30,19 +30,23 @@ function newToken(): string {
   return randomBytes(32).toString("hex");
 }
 
+// Auf Production (Render) wird das Cookie mit Secure-Flag gesetzt, damit moderne
+// Browser (insbesondere iOS Safari) es über HTTPS akzeptieren. Lokal (dev) bleibt Secure aus.
+const IS_PROD = process.env.NODE_ENV === "production";
+const COOKIE_FLAGS = `Path=/; HttpOnly; SameSite=Lax${IS_PROD ? "; Secure" : ""}`;
+
 function setSessionCookie(res: Response, token: string) {
   const maxAge = SESSION_MS / 1000;
-  // Path=/, HttpOnly, SameSite=Lax (kein Secure wegen ggf. lokaler Tests; Render ist HTTPS)
   res.setHeader(
     "Set-Cookie",
-    `${COOKIE_NAME}=${encodeURIComponent(token)}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax`,
+    `${COOKIE_NAME}=${encodeURIComponent(token)}; Max-Age=${maxAge}; ${COOKIE_FLAGS}`,
   );
 }
 
 function clearSessionCookie(res: Response) {
   res.setHeader(
     "Set-Cookie",
-    `${COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`,
+    `${COOKIE_NAME}=; Max-Age=0; ${COOKIE_FLAGS}`,
   );
 }
 
